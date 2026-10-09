@@ -2,7 +2,7 @@
   (:require [clojure.pprint :as pprint]
             [clojure.string :as str]
             [dbt-workbench.query-processor.tokens :as tokens]
-            [dbt-workbench.jdbc :as jdbc]
+            [dbt-workbench.connections :as connections]
             [dbt-workbench.query-processor.compile :as compiler]
             [dbt-workbench.query-processor.driver :as driver]
             [dbt-workbench.query-processor.honey :as honey-query]
@@ -14,13 +14,13 @@
   (case (:format options "sql") "sql" {:query/version 1 :sql (:content options)} "edn" (parse/parse-edn (:content options))
         (storage/fail! "Format must be SQL or EDN.")))
 (defn read-catalog! [directory project-id target]
-  (let [metadata (store/create-store directory project-id {:target target})]
-    (with-open [connection (driver/connect-duckdb! metadata)]
-      (let [columns (jdbc/query-maps! connection "SELECT table_schema,table_name,column_name,data_type FROM information_schema.columns WHERE table_catalog=current_database() ORDER BY table_schema,table_name,ordinal_position")]
-        {:relations (->> columns (group-by (juxt :table_schema :table_name))
-                         (map (fn [[[schema table] fields]] {:name (if (= schema "main") table (str schema "." table)) :label table :schema schema
-                                                            :columns (mapv #(hash-map :name (:column_name %) :type (:data_type %)) fields)}))
-                         (sort-by :name) vec)}))))
+  (let [metadata (store/create-store directory project-id {:target target})
+        schema (connections/read-schema! directory project-id (:target metadata))]
+    {:relations (mapv (fn [relation]
+                       (assoc relation :name (if (= "main" (:schema relation)) (:name relation)
+                                              (str (:schema relation) "." (:name relation)))
+                                       :label (:name relation)))
+                     (:relations schema))}))
 (defn parameter-names [content format]
   (let [query (parse-input {:content content :format format})]
     (if (:sql query)
@@ -33,7 +33,7 @@
         query (parse-input options)
         compiled (compiler/compile query metadata options false)
         result (driver/execute! compiled metadata options cancel register-statement!)]
-    (merge result {:dialect (:dialect options "duckdb")
+    (merge result {:dialect (or (:dialect options) (if (= "snowflake" (get-in metadata [:output :type])) "snowflake" "duckdb"))
                    :provenance {:target (:target metadata) :format (:format options "sql") :editor_content (:editor_content options (:content options))
                                 :original_sql (when (= "sql" (:format options "sql")) (:content options))
                                 :original_edn (when (= "edn" (:format options)) (:content options))

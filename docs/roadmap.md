@@ -1,14 +1,24 @@
-# Query processor extension points
+# Extension points
 
-The query processor separates parse, metadata, compile, and driver concerns.
-Extend each database driver only with native execution evidence for its supported operations and types.
-HoneySQL generation alone does not establish cross-engine equivalence.
+Extend the implemented workflows with source-backed execution evidence.
+A generated query or working UI alone does not establish cross-engine correctness.
 
-Add JDBC warehouse connectors with explicit profile resolution, read-only capabilities, timeouts, cancellation,
-and typed result metadata. Keep dbt materializations authoritative through the selected native CLI.
+| Area | Implemented boundary | Extension requirement |
+| --- | --- | --- |
+| SQL conversion | Bounded SQL/HoneySQL roundtrips | Add execution tests for each AST shape |
+| Connections | DuckDB, Snowflake JDBC, Snow CLI references | Define authentication, declared types, timeouts, and cancellation |
+| Federation | Bounded JDBC captures joined in DuckDB | Prove source consistency and type semantics before expanding limits |
+| Inspection | Manifest resources, catalog schema, recorded runs and freshness | Preserve artifact provenance and explicit missing states |
+| Saved queries | Browser storage and JSON export | Define import validation and shared persistence before adding sync |
+| Version control | Local Git operations and explicit GitHub reads/drafts | Define review and authorization boundaries for remote writes |
+
+Keep native dbt authoritative for project compilation and materialization.
 Preserve decimal, timestamp, NULL, and duplicate semantics in source-oracle tests.
+Unsupported queries must retain their drafts with actionable diagnostics.
 
-Extend SQL-to-HoneySQL conversion with execution roundtrip tests for each added AST node.
-Unsupported queries should retain their SQL draft instead of generating opaque SQL inside EDN.
-Versioned data captures should record schemas, content hashes, source consistency, and artifact identity.
-Imported baseline artifacts and captured rows must remain distinct concepts.
+Versioned data captures need schema, content hashes, source consistency, and artifact identity.
+Keep imported baseline artifacts distinct from captured rows.
+Snow CLI JSON inference cannot substitute for declared source types in federation.
+
+External Snowflake JDBC, remote federation, and GitHub workflows need dedicated acceptance evidence.
+Local fixtures and a generic CLI SELECT check cannot establish those workflows end to end.

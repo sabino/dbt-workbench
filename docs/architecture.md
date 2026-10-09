@@ -1,71 +1,95 @@
 # Architecture
 
-Clojure owns the API, workspace, job runtime, and query processor.
-ClojureScript/Fulcro and CodeMirror own the browser interface.
-Native dbt 2.0.5 owns project parsing, Jinja compilation, materialization, and tests.
-Python and SQLGlot were removed from the application.
+Clojure owns the API, workspace, job queues, and query processor.
+ClojureScript/Fulcro, React panels, and CodeMirror own the browser interface.
+Native dbt 2.0.5 handles project parsing, Jinja compilation, materialization, and tests.
 
 ```mermaid
 flowchart TD
-    UI["ClojureScript + CodeMirror"] --> API["Loopback JDK HTTP server"]
-    API --> W["Workspace: files, revisions, changes"]
+    UI["Workspace, CodeMirror, inspectors"] --> API["Loopback HTTP server"]
+    API --> W["Files, revisions, Git, artifact inspection"]
     API --> R["Durable project job queues"]
     R --> DBT["Native dbt CLI"]
-    R --> Q["Parse and validate"]
-    Q --> S["Query-scoped metadata store"]
-    S --> C["HoneySQL compile or native SQL"]
-    C --> D["JDBC: DuckDB or captured SQLite"]
-    R --> P["SQLite metadata + JSON result snapshots"]
+    R --> Q["Parse, metadata, compile"]
+    Q --> JDBC["DuckDB, SQLite capture, Snowflake JDBC"]
+    Q --> CLI["Referenced Snow CLI connection"]
+    Q --> F["Federated source capture"]
+    F --> LOCAL["Isolated DuckDB join"]
+    R --> P["SQLite metadata and JSON captured rows"]
+    UI --> B["Browser query library and preferences"]
 ```
 
-## Query processor
+## Query execution
 
-The pipeline separates parsing, query-scoped metadata, compilation, and driver execution.
-It follows Metabase's stage boundaries without copying its implementation or adding a Metabase runtime.
-Metadata comes from explicit project profiles, manifests, and baseline artifact identities.
-There is no mutable global query metadata cache.
+The pipeline separates parsing, query-scoped metadata, compilation, and execution.
+Metadata resolves project profiles, registered connections, model routes, manifests, and baseline identities.
+There is no global mutable query metadata cache.
 
-JSqlParser validates native SQL and identifies physical tables, parameters, and unsafe operations.
-Malli validates external requests and structured EDN. HoneySQL lowers structured expressions to bound SQL.
-SQL-to-EDN maps parsed projections, expressions, sources, joins, CTEs, grouping, and ordering into HoneySQL data.
-Unsupported conversion nodes fail with a diagnostic while the browser retains the draft.
-EDN-to-SQL compiles through HoneySQL, emits named parameters, and returns values separately.
-A vector of maps expresses sequential queries. Legacy versioned EDN remains readable for saved job replay.
-Visual controls edit the same HoneySQL map. A read-only information-schema catalog supplies table and column choices.
-SQL tokenization preserves strings and comments while binding named parameters and normalizing parser input.
+JSqlParser identifies physical tables, parameters, and unsafe operations.
+Malli validates requests and structured EDN. HoneySQL compiles query maps to SQL with separate parameter values.
+SQL-to-EDN conversion supports a bounded grammar. Unsupported expressions retain the browser draft with a diagnostic.
+Visual controls edit the same query maps. Relation schema comes from real connection metadata.
+Tokenization preserves strings and comments when splitting statements or binding parameters.
 
-DuckDB connections are read-only. SQLite runs bounded copies of referenced DuckDB tables in memory.
-Native division is refused in SQLite because its numeric semantics can differ.
-Structured division defines floating-point, NULL-on-zero behavior for both engines.
-Read-only function validation, row limits, deadlines, and cancellation bound query execution.
+DuckDB opens database files read-only. SQLite previews copy referenced DuckDB relations into memory.
+Snowflake JDBC resolves environment-backed credentials and executes validated SELECT queries.
+Snow CLI uses a configured connection reference and bounded JSON output. It infers result types from returned values.
 
-## Jobs, persistence, and edits
+Federation resolves `connection.schema.table` or model routes, then copies supported scalar values into isolated DuckDB.
+Source JDBC metadata supplies declared types. Each source capture has a row cap; exceeding it fails the query.
+Captures share a deadline but no cross-source transaction. The final join uses DuckDB semantics.
+Snow CLI inputs are refused because their JSON results lack declared source types.
 
-The runtime serializes jobs within each project and allows independent projects to run concurrently.
-Native dbt uses per-job artifact directories. Successful Build includes dbt tests.
-The demo's first Build also prepares baseline relations. Advanced choices remain under Build options.
-Deferral uses dbt's own state and favor-state flags.
+## State and inspection
 
-SQLite persists job inputs, events, summaries, and result metadata.
-JSON files preserve captured rows. Comparisons use unordered row multisets and retain duplicate counts.
-Activity records full editor text, execution scope, parameters, targets, artifact hashes, bindings,
-timestamps, limits, errors, and individual statement results.
-Batch execution stops at the first failure and retains completed results.
+The runtime serializes jobs within each project. Independent projects can run concurrently.
+Native dbt uses per-job artifact directories. Demo builds can prepare baseline relations before development relations.
+Deferral uses dbt state and favor-state flags.
 
-File saves require the latest SHA-256 revision. Saves record immutable before/after versions.
-Loading a version makes an editable draft; Save creates another recorded change.
-Saves and baseline imports wait until that project's queued and active jobs finish.
-Symbolic links, generated directories, profiles, and paths outside the project are excluded.
+SQLite persists jobs, events, summaries, and result metadata. JSON files preserve captured rows.
+Activity records full drafts, execution scope, parameters, bindings, artifact identities, limits, and per-statement result IDs.
+Batch execution stops on the first failure and retains completed results.
+Row comparison uses unordered rows and preserves duplicate counts.
 
-Baseline artifact directories preserve successful compilation state, not source database contents.
-External editors and database writers remain outside the workbench's transaction boundaries.
-Existing Python-era job metadata is retained. Legacy Arrow rows need a saved-query rerun.
+Inspection reads manifests, catalogs, run results, and source freshness artifacts.
+The catalog inventories manifest resource types, including macros. Lineage keeps its dependency graph separate from macro inventory.
+Run inspection reads artifact files even when failed jobs lack summary artifacts.
+Run comparison summarizes recorded model/test outcomes and timing; it does not compare database rows.
+Overview combines recorded tests, local Git changes, recent jobs, and transitive model dependencies.
 
-## Frontend and distribution
+File saves require the latest content revision and preserve before/after versions.
+Loading a historical version creates a draft. Active jobs block file saves and reference changes.
+Generated paths, profiles, symbolic links, and paths outside the project are excluded from editing.
+Baseline artifacts preserve compilation state, not source rows.
 
-Bun installs pinned dependencies and shadow-cljs compiles the UI into `resources/static/js`.
-The compiled assets ship in the repository. Java and Clojure run the application.
-SQL Formatter uses its published browser bundle. Closure optimization alters its raw named-capture templates, so the build copies it unchanged.
-CodeMirror uses Nextjournal's Clojure grammar for EDN highlighting. Formatting preferences persist in browser storage.
-The native dbt installer verifies a pinned release archive with SHA-256.
-`DBT_WORKBENCH_DBT` can select another executable with the project's required platform support.
+## Local and remote operations
+
+Connection registration stores local settings or references. It does not rewrite dbt profiles.
+Saved Snowflake credentials name environment variables. Snow CLI import saves only a configured connection name.
+Model routing validates destination relations and records explicit overrides.
+
+Git stages and commits project files, switches branches, rebases, and cherry-picks locally.
+Conflicts remain available for terminal resolution or abort.
+GitHub uses the authenticated `gh` CLI. Pull-request and check reads require explicit UI actions.
+Draft creation requires a published matching branch. The workbench does not push commits.
+
+## Browser and distribution
+
+The left navigation collapses to icons and retains labeled project-tool actions.
+Overview, Documentation, Connections, Environment routing, and Version control open between navigation and Query lab.
+Query lab stays mounted independently of project views and lower tabs.
+Results, Lineage, Activity, Changes, and Runs & tests share the resizable panel below its editor.
+The right Files pane contains the sole file explorer, file tabs, and CodeMirror editors.
+Models and All files filter one tree, replacing the duplicate left file list.
+Multiple file tabs retain drafts. Pane sizes, explorer visibility, file views, and navigation collapse persist in browser storage.
+A global status bar shows progress, elapsed time, errors, and cancellation across views.
+The browser query library saves drafts per project and exports JSON.
+Formatting preferences and query drafts remain in browser storage, separate from server persistence.
+Charts aggregate sampled saved rows into multiple metrics and optional breakdown categories.
+Sum, Average, Count rows, and Count distinct feed bar or line plots with legend controls.
+Rendering is bounded to 1,000 saved rows, 40 groups, and eight series.
+
+Bun installs pinned dependencies. shadow-cljs compiles assets into `resources/static/js`.
+SQL Formatter's browser bundle is copied unchanged to preserve its regular-expression templates.
+CodeMirror uses Nextjournal's Clojure grammar for EDN.
+The native dbt installer verifies its pinned archive checksum.

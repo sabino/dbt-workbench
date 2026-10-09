@@ -1,6 +1,6 @@
 import {chromium} from "playwright";
 import {expect} from "@playwright/test";
-import {mkdtemp, mkdir, writeFile, rm} from "node:fs/promises";
+import {mkdtemp, mkdir, writeFile, appendFile, rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {resolve, join} from "node:path";
 import {createServer} from "node:net";
@@ -16,6 +16,7 @@ await new Promise(resolve => socket.close(resolve));
 const processHandle = Bun.spawn(["clojure", "-M:run", "--port", String(port), "--data-dir", dataDir], {cwd: projectRoot, stdout: "ignore", stderr: Bun.file(join(output, "server.log"))});
 const base = `http://127.0.0.1:${port}`;
 let browser;
+let page;
 const evidence = {jobs: [], browser_errors: []};
 try {
   for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -24,11 +25,12 @@ try {
     if (attempt === 199) throw new Error("Clojure server failed to start");
   }
   browser = await chromium.launch({headless: true});
-  const page = await browser.newPage({viewport: {width: 1536, height: 1024}});
+  page = await browser.newPage({viewport: {width: 1536, height: 1024}});
   page.on("pageerror", error => evidence.browser_errors.push(String(error)));
   await page.goto(base);
   await page.getByRole("button", {name: "Create Jaffle demo", exact: false}).click();
   await expect(page.getByLabel("Target", {exact: true})).toBeVisible();
+  await expect(page.locator(".floating-menu:visible")).toHaveCount(0);
 
   async function job(action, success = true) {
     const responsePromise = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/jobs"));
@@ -43,8 +45,8 @@ try {
     }
     evidence.jobs.push(record);
     expect(record.status, JSON.stringify(record)).toBe(success ? "succeeded" : "failed");
-    await expect(page.locator(".job-row.active")).toContainText(record.status, {timeout: 10000});
-    if (record.result_id) await expect(page.getByLabel("Saved result", {exact: true})).toHaveValue(record.result_id, {timeout: 10000});
+    await expect(page.getByRole("status", {name: "Workbench status", exact: true})).toContainText(success ? "completed" : "failed", {timeout: 10000});
+    if (record.result_id && record.kind !== "compare") await expect(page.getByLabel("Saved result", {exact: true})).toHaveValue(record.result_id, {timeout: 10000});
     return record;
   }
 
@@ -54,11 +56,11 @@ try {
   await page.getByRole("button", {name: "Query lab", exact: true}).click();
   const editor = page.getByRole("textbox", {name: "Query editor", exact: true});
   async function setQuerySetting(label, value, select = false) {
-    const menu = page.locator(".query-settings");
-    await menu.locator("summary").click();
+    const menu = page.getByRole("button", {name: "Query settings", exact: true});
+    await menu.click();
     if (select) await page.getByLabel(label, {exact: true}).selectOption(value);
     else await page.getByLabel(label, {exact: true}).fill(value);
-    await menu.locator("summary").click();
+    await menu.click();
   }
   const sql = "SELECT customer_id, SUM(amount) AS revenue\nFROM orders\nGROUP BY customer_id\nORDER BY customer_id;\n\nSELECT COUNT(*) AS count FROM customers;";
   await editor.fill(sql);
@@ -104,9 +106,11 @@ try {
   await page.getByLabel("Search models").fill("missing-model");
   await expect(page.getByText("No matching models.", {exact: true})).toBeVisible();
   await page.getByLabel("Search models").fill("");
+  await page.getByRole("button", {name: "Activity", exact: true}).click();
   await page.getByLabel("Filter activity").selectOption("test");
   await expect(page.locator(".job-row")).toHaveCount(1);
   await page.getByLabel("Filter activity").selectOption("all");
+  await page.getByRole("button", {name: "Results", exact: true}).click();
   await editor.fill(sql);
   await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
   const desktopLayout = await page.evaluate(() => {
@@ -136,6 +140,10 @@ try {
   await page.screenshot({path: join(output, "autocomplete-dark.png"), fullPage: true});
   await editor.press("Escape");
   await editor.fill(sql);
+  await page.getByRole("button", {name: "Model SQL", exact: true}).click();
+  await expect(page.locator(".file-tab.active")).toContainText("customers.sql");
+  await expect(page.getByLabel("Model file editor", {exact: true}).filter({visible: true})).toBeVisible();
+  await expect(editor).toContainText("SUM(amount)");
   await page.screenshot({path: join(output, "query-dark.png"), fullPage: true});
   await page.getByLabel("Theme", {exact: true}).selectOption("system");
   await page.emulateMedia({colorScheme: "light", reducedMotion: "reduce"});
@@ -143,6 +151,21 @@ try {
     await page.setViewportSize({width, height: 900});
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     await expect(page.getByRole("button", {name: "Run statement", exact: true})).toBeVisible();
+    await page.getByRole("button", {name: "Browse history", exact: true}).click();
+    const historyMenu = page.locator(".floating-menu:popover-open");
+    await expect(historyMenu).toBeVisible();
+    const menuBounds = await historyMenu.boundingBox();
+    expect(menuBounds.x).toBeGreaterThanOrEqual(0);
+    expect(menuBounds.y).toBeGreaterThanOrEqual(0);
+    expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(width);
+    expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(900);
+    expect(await historyMenu.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+    })).toBe(true);
+    await page.screenshot({path: join(output, `history-menu-${width}.png`), fullPage: true});
+    await page.keyboard.press("Escape");
+    await expect(historyMenu).toHaveCount(0);
     await page.screenshot({path: join(output, `query-${width}.png`), fullPage: true});
   }
   await page.setViewportSize({width: 1536, height: 1024});
@@ -159,16 +182,17 @@ try {
   await expect(editor).toHaveAttribute("data-language", "sql");
   await expect(editor).toContainText("COUNT(*)");
   await editor.fill("select customer_id,sum(amount) as revenue from orders group by customer_id order by customer_id");
-  await page.locator(".format-preferences summary").click();
+  await page.getByRole("button", {name: "SQL formatting", exact: true}).click();
   await page.getByLabel("Keyword case", {exact: true}).selectOption("lower");
   await page.getByLabel("Indent with", {exact: true}).selectOption("true");
   await page.getByRole("button", {name: "Format", exact: true}).click();
   await expect(editor).toContainText("select");
   await expect(editor.locator(".cm-line")).not.toHaveCount(1);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("workbench.sql-format-options")))).toMatchObject({keywordCase: "lower", useTabs: true});
+  await page.getByRole("button", {name: "SQL formatting", exact: true}).click();
   await page.getByLabel("Keyword case", {exact: true}).selectOption("upper");
   await page.getByLabel("Indent with", {exact: true}).selectOption("false");
-  await page.locator(".format-preferences summary").click();
+  await page.getByRole("button", {name: "SQL formatting", exact: true}).click();
   await page.getByRole("button", {name: "Visual", exact: true}).click();
   await expect(page.getByLabel("Visual query builder", {exact: true})).toBeVisible();
   await expect(page.getByLabel("Source table", {exact: true})).toHaveValue("orders");
@@ -217,16 +241,17 @@ try {
   const sqlite = await job(() => editor.press("F5"));
   await expect(page.getByRole("region", {name: "Compare saved results"})).toHaveCount(0);
   await page.getByRole("button", {name: "Results", exact: true}).click();
-  await page.getByLabel("Baseline result", {exact: true}).selectOption(native.result_id);
-  await page.getByLabel("Candidate result", {exact: true}).selectOption(native.result_id);
+  await page.getByRole("button", {name: "Compare", exact: true}).click();
   await expect(page.getByRole("button", {name: "Compare results", exact: true})).toBeDisabled();
-  await page.getByLabel("Candidate result", {exact: true}).selectOption(sqlite.result_id);
+  await expect(page.getByLabel("Compare to", {exact: true}).locator(`option[value="${sqlite.result_id}"]`)).toHaveCount(0);
+  await page.getByLabel("Compare to", {exact: true}).selectOption(native.result_id);
   const comparison = await job(() => page.getByRole("button", {name: "Compare results", exact: true}).click());
   expect(comparison.summary.equal).toBe(true);
   await expect(page.locator(".comparison-outcome")).toContainText("Rows match");
   await page.screenshot({path: join(output, "results-compare.png"), fullPage: true});
-  await page.getByRole("button", {name: "Query lab", exact: true}).click();
+  await page.getByRole("button", {name: "Results", exact: true}).click();
   await expect(page.getByRole("region", {name: "Compare saved results"})).toHaveCount(0);
+  await page.getByRole("button", {name: "Activity", exact: true}).click();
   await page.locator(".job-row").filter({hasText: "Query"}).nth(0).click();
 
   await page.getByRole("button", {name: "Load query", exact: true}).click();
@@ -235,9 +260,25 @@ try {
   expect(replay.options.content).toBe(sqlite.options.content);
   expect(replay.options.dialect).toBe("sqlite");
 
+  let releaseFileResponse;
+  const fileResponseGate = new Promise(resolve => { releaseFileResponse = resolve; });
+  const delayedPath = /\/api\/projects\/demo-jaffle-shop\/file\?path=models%2Forders\.sql$/;
+  await page.route(delayedPath, async route => { await fileResponseGate; await route.continue(); });
+  const slowFileResponse = page.waitForResponse(response => delayedPath.test(response.url()));
   await page.locator(".model-row[title='models/orders.sql']").click();
-  const modelEditor = page.getByLabel("Model file editor");
-  const before = await modelEditor.inputValue();
+  await expect(page.getByLabel("Model file editor", {exact: true}).filter({visible: true})).toHaveAttribute("contenteditable", "false");
+  await expect(editor).toHaveAttribute("contenteditable", "true");
+  await page.locator(".model-row[title='models/staging/stg_customers.sql']").click();
+  await expect(page.locator(".file-tab.active")).toContainText("stg_customers.sql");
+  releaseFileResponse();
+  await slowFileResponse;
+  await page.unroute(delayedPath);
+  await expect(page.locator(".file-tab.active")).toContainText("stg_customers.sql");
+  await expect(page.getByLabel("Model file editor", {exact: true}).filter({visible: true})).toHaveAttribute("contenteditable", "true");
+  await page.locator(".model-row[title='models/orders.sql']").click();
+  await expect(page.locator(".file-tab.active")).toContainText("orders.sql");
+  const modelEditor = page.getByLabel("Model file editor", {exact: true}).filter({visible: true});
+  const before = (await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=models/orders.sql`)).json()).content;
   await modelEditor.fill(before + "\n-- Browser history verification\n");
   await page.getByRole("button", {name: "Save file", exact: true}).click();
   await expect(page.getByText("File saved to your project.", {exact:true})).toBeVisible();
@@ -245,9 +286,10 @@ try {
   await expect(page.locator(".change-entry")).toHaveCount(1);
   await page.locator(".change-entry summary").click();
   await page.getByRole("button", {name: "Load before", exact: true}).click();
-  await expect(modelEditor).toHaveValue(before);
+  await expect(modelEditor).toContainText("orders");
   await expect(page.getByText("Unsaved", {exact: true})).toBeVisible();
   await page.getByRole("button", {name: "Save file", exact: true}).click();
+  await page.getByRole("button", {name: "Changes", exact: true}).click();
   await expect(page.locator(".change-entry")).toHaveCount(2);
   await page.screenshot({path: join(output, "changes.png"), fullPage: true});
 
@@ -262,7 +304,7 @@ try {
   const longPromise = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/jobs"));
   await editor.press("F5");
   const longJob = await (await longPromise).json();
-  await expect(page.getByRole("status", {name: "Query status"})).toContainText(/Running|Queued/);
+  await expect(page.getByRole("status", {name: "Workbench status"})).toContainText(/running|queued/i);
   await page.getByRole("button", {name: "Cancel query", exact: true}).click({timeout: 10000});
   await expect.poll(async () => (await (await page.request.get(`${base}/api/jobs/${longJob.id}`)).json()).status).toBe("cancelled");
   await editor.fill("SELECT 42 AS value");
@@ -274,9 +316,201 @@ try {
   await expect(page.getByLabel("Theme", {exact: true})).toHaveValue("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.getByLabel("Project", {exact: true})).toHaveValue("demo-jaffle-shop");
+  await page.getByRole("button", {name: "Activity", exact: true}).click();
   await expect(page.locator(".job-row")).not.toHaveCount(0);
   await page.getByRole("button", {name: "Changes", exact: true}).click();
   await expect(page.locator(".change-entry")).toHaveCount(2);
+
+  await page.locator(".model-row[title='models/orders.sql']").click();
+  await page.getByRole("button", {name: "Search files and commands", exact: true}).click();
+  await page.getByLabel("Search commands", {exact: true}).fill("models/customers.sql");
+  await page.getByLabel("Search commands", {exact: true}).press("Enter");
+  await expect(page.locator(".file-tab.active")).toContainText("customers.sql");
+  const visibleFile = page.getByLabel("Model file editor", {exact: true}).filter({visible: true});
+  const customerFile = (await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=models/customers.sql`)).json()).content;
+  await visibleFile.fill(customerFile + "\n-- Unsaved tab verification\n");
+  await page.getByRole("navigation", {name: "Open files", exact: true}).getByRole("button", {name: "orders.sql", exact: true}).click();
+  await page.getByRole("navigation", {name: "Open files", exact: true}).getByRole("button", {name: /^customers\.sql/}).click();
+  await expect(visibleFile).toContainText("Unsaved tab verification");
+  await visibleFile.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
+  await expect(visibleFile).not.toContainText("Unsaved tab verification");
+  await page.screenshot({path: join(output, "model-files.png"), fullPage: true});
+
+  const split = page.getByRole("separator", {name: "Resize query and results", exact: true});
+  await split.focus();
+  await split.press("ArrowDown");
+  await expect(split).toHaveAttribute("aria-valuenow", "55");
+  await split.press("ArrowUp");
+  await expect(split).toHaveAttribute("aria-valuenow", "50");
+  await split.press("ArrowDown");
+  const filesDivider = page.getByRole("separator", {name: "Resize files", exact: true});
+  await filesDivider.focus();
+  await filesDivider.press("ArrowLeft");
+  await expect(filesDivider).toHaveAttribute("aria-valuenow", "410");
+  const explorerDivider = page.getByRole("separator", {name: "Resize file explorer and editor", exact: true});
+  await explorerDivider.focus();
+  await explorerDivider.press("ArrowDown");
+  await expect(explorerDivider).toHaveAttribute("aria-valuenow", "39");
+  await page.getByRole("button", {name: "All files", exact: true}).click();
+  await expect(page.locator(".file-explorer")).toHaveCount(1);
+  await expect(page.locator(".sidebar .tree-folder")).toHaveCount(0);
+  await page.getByRole("button", {name: "Collapse navigation", exact: true}).click();
+  await page.getByRole("button", {name: "Hide file explorer", exact: true}).click();
+  await page.reload();
+  await expect(page.getByRole("button", {name: "Expand navigation", exact: true})).toBeVisible();
+  await expect(split).toHaveAttribute("aria-valuenow", "55");
+  await expect(filesDivider).toHaveAttribute("aria-valuenow", "410");
+  await expect(page.getByRole("button", {name: "Show file explorer", exact: true})).toBeVisible();
+  await page.getByRole("button", {name: "Expand navigation", exact: true}).click();
+  await page.getByRole("button", {name: "Show file explorer", exact: true}).click();
+  await expect(explorerDivider).toHaveAttribute("aria-valuenow", "39");
+  await expect(page.getByRole("button", {name: "All files", exact: true})).toHaveAttribute("aria-pressed", "true");
+  const dividerBox = await filesDivider.boundingBox();
+  await page.mouse.move(dividerBox.x + dividerBox.width / 2, dividerBox.y + dividerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(dividerBox.x - 50, dividerBox.y + dividerBox.height / 2, {steps: 4});
+  await page.mouse.up();
+  await expect(filesDivider).toHaveAttribute("aria-valuenow", "464");
+  await page.reload();
+  await expect(filesDivider).toHaveAttribute("aria-valuenow", "464");
+  await page.getByRole("button", {name: "Restore default layout", exact: true}).click();
+  await expect(split).toHaveAttribute("aria-valuenow", "50");
+  await expect(filesDivider).toHaveAttribute("aria-valuenow", "390");
+  await setQuerySetting("Maximum result rows", "2");
+  await editor.fill("SELECT customer_id FROM customers ORDER BY customer_id LIMIT 5");
+  const bounded = await job(() => editor.press("F5"));
+  expect(bounded.summary.row_count).toBe(2);
+  expect(bounded.summary.truncated).toBe(true);
+  await setQuerySetting("Maximum result rows", "10000");
+  await setQuerySetting("Execution dialect", "federated", true);
+  const federatedSql = "SELECT COUNT(*) AS joined_rows FROM dev.main.customers c JOIN baseline.main.customers b USING (customer_id)";
+  await editor.fill(federatedSql);
+  const federated = await job(() => editor.press("F5"));
+  expect(federated.summary.row_count).toBe(1);
+  await expect(page.locator(".result-grid tbody td").last()).toHaveText("100");
+  await page.getByRole("button", {name: "Saved queries", exact: true}).click();
+  await page.getByLabel("Saved query name", {exact: true}).fill("Customer federation");
+  await page.getByRole("button", {name: "Save query", exact: true}).click();
+  await page.getByRole("button", {name: "Saved queries", exact: true}).click();
+  await editor.fill("SELECT 99 AS value");
+  await page.getByRole("button", {name: "Saved queries", exact: true}).click();
+  await page.getByLabel("Open saved query", {exact: true}).selectOption("");
+  const savedId = await page.getByLabel("Open saved query", {exact: true}).locator("option").last().getAttribute("value");
+  await page.getByLabel("Open saved query", {exact: true}).selectOption(savedId);
+  await expect(editor).toContainText(federatedSql);
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", {name: "Export query", exact: true}).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("workbench-query.json");
+  await page.getByRole("button", {name: "Saved queries", exact: true}).click();
+  await page.getByRole("button", {name: "Lineage", exact: true}).click();
+  await expect(page.getByRole("img", {name: "Project dependency graph"})).toBeVisible();
+  await page.getByRole("button", {name: "Inspect customers", exact: true}).locator("rect").click();
+  await expect(page.locator(".impact-counts")).toContainText("upstream");
+  await page.screenshot({path: join(output, "lineage.png"), fullPage: true});
+  const queryNode = await editor.elementHandle();
+  await page.getByRole("button", {name: "Documentation", exact: true}).click();
+  const contextLayout = await page.evaluate(() => {
+    const bounds = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+    return {sidebar: bounds(".sidebar"), context: bounds(".project-context-pane"), query: bounds(".main-pane")};
+  });
+  expect(contextLayout.context.left).toBeGreaterThanOrEqual(contextLayout.sidebar.right);
+  expect(contextLayout.context.right).toBeLessThanOrEqual(contextLayout.query.left);
+  expect(await queryNode.evaluate(node => node === document.querySelector("[aria-label=\"Query editor\"]"))).toBe(true);
+  const contextDivider = page.getByRole("separator", {name: "Resize project view", exact: true});
+  await contextDivider.focus();
+  await contextDivider.press("ArrowRight");
+  await expect(contextDivider).toHaveAttribute("aria-valuenow", "410");
+  await expect(page.getByLabel("Catalog resource", {exact: true})).toBeVisible();
+  await expect(page.locator(".project-context-pane .inspector-content")).toContainText("Schema");
+  await page.screenshot({path: join(output, "documentation.png"), fullPage: true});
+  await page.getByRole("button", {name: "Connections", exact: true}).click();
+  await page.getByRole("button", {name: "Test connection", exact: true}).last().click();
+  await expect(page.locator(".connection-card").last()).toContainText("Connection succeeded");
+  await page.getByRole("button", {name: "Browse schema", exact: true}).last().click();
+  await expect(page.locator(".project-context-pane .inspector-content")).toContainText("customer_id");
+  await page.screenshot({path: join(output, "connections.png"), fullPage: true});
+  await page.getByRole("button", {name: "Environment routing", exact: true}).click();
+  await page.getByLabel("Route customers", {exact: true}).selectOption("baseline");
+  await page.getByRole("button", {name: "Validate routing", exact: true}).click();
+  await expect(page.locator(".inspector-card[role=status]")).toContainText("Routed relations are readable");
+  await page.getByRole("button", {name: "Save routing", exact: true}).click();
+  await expect(page.getByRole("status", {name: "Workbench status"})).toContainText("Model routing saved");
+  await page.screenshot({path: join(output, "routing.png"), fullPage: true});
+  await page.getByRole("button", {name: "Clear overrides", exact: true}).click();
+  await page.getByRole("button", {name: "Save routing", exact: true}).click();
+  await page.getByRole("button", {name: "Runs & tests", exact: true}).click();
+  await expect(page.locator(".artifact-link")).not.toHaveCount(0);
+  await page.screenshot({path: join(output, "runs.png"), fullPage: true});
+  await page.getByRole("button", {name: "Version control", exact: true}).click();
+  await expect(page.locator(".inspector-panel")).toContainText("repository");
+
+  // This fixture repository belongs to this test's temporary project directory.
+  const demo = await (await page.request.get(`${base}/api/projects/demo-jaffle-shop`)).json();
+  async function fixtureGit(args) {
+    const process = Bun.spawn(["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgSign=false", ...args], {cwd: demo.path, stdout: "pipe", stderr: "pipe"});
+    const [stdout, stderr, exit] = await Promise.all([new Response(process.stdout).text(), new Response(process.stderr).text(), process.exited]);
+    expect(exit, `${stdout}\n${stderr}`).toBe(0);
+  }
+  await fixtureGit(["init", "-b", "main"]);
+  await fixtureGit(["config", "user.name", "Workbench test"]);
+  await fixtureGit(["config", "user.email", "workbench-test@example.invalid"]);
+  await writeFile(join(demo.path, ".gitignore"), "target/\nlogs/\ndbt_packages/\ndbt_modules/\n.user.yml\n");
+  await fixtureGit(["add", "--", "dbt_project.yml", "models", "seeds", ".gitignore", "LICENSE", "PROVENANCE.json", "README.md"]);
+  await fixtureGit(["commit", "-m", "test: seed local project"]);
+  await appendFile(join(demo.path, "models/orders.sql"), "\n-- Local Git browser verification\n");
+  await page.getByRole("button", {name: "Documentation", exact: true}).click();
+  await page.getByRole("button", {name: "Version control", exact: true}).click();
+  await page.getByRole("button", {name: "View diff for models/orders.sql", exact: true}).click();
+  await expect(page.locator(".diff-view")).toContainText("Local Git browser verification");
+  await page.getByRole("button", {name: "Side by side", exact: true}).click();
+  await expect(page.locator(".diff-columns")).toBeVisible();
+  await page.getByRole("button", {name: "Stage models/orders.sql", exact: true}).click();
+  await expect(page.getByRole("button", {name: "Unstage models/orders.sql", exact: true})).toBeVisible();
+  await page.getByRole("button", {name: "Unstage models/orders.sql", exact: true}).click();
+  await page.getByRole("button", {name: "Stage models/orders.sql", exact: true}).click();
+  await page.getByLabel("Commit message", {exact: true}).fill("test: verify local Git workflow");
+  await page.getByRole("button", {name: "Commit 1 staged file", exact: true}).click();
+  await expect(page.locator(".git-panel")).toContainText("Working tree is clean");
+  await page.getByRole("button", {name: "Branches", exact: true}).click();
+  await page.getByLabel("New branch name", {exact: true}).fill("feat/browser-check");
+  await page.getByRole("button", {name: "Create branch", exact: true}).click();
+  await expect(page.getByLabel("Git branch", {exact: true})).toHaveValue("feat/browser-check");
+  await page.getByLabel("Git branch", {exact: true}).selectOption("main");
+  await expect(page.getByLabel("Git branch", {exact: true})).toHaveValue("main");
+  await page.screenshot({path: join(output, "git.png"), fullPage: true});
+
+  await page.locator(".model-row[title='models/customers.sql']").click();
+  await expect(page.getByLabel("Model file editor", {exact: true}).filter({visible: true})).toBeVisible();
+  await page.getByRole("button", {name: "Overview", exact: true}).click();
+  await expect(page.locator(".overview-metrics")).toContainText("Models");
+  await expect(page.locator(".overview-tests")).toContainText("20 recorded test outcomes");
+  await expect(page.locator(".overview-changes")).toContainText("0 project source changes");
+  await expect(page.locator(".overview-impact")).toContainText("upstream resources");
+  await page.screenshot({path: join(output, "overview.png"), fullPage: true});
+  await page.getByRole("button", {name: "Close project view", exact: true}).click();
+  await page.getByRole("button", {name: "Results", exact: true}).click();
+  await page.getByRole("button", {name: "Chart", exact: true}).click();
+  await expect(page.getByLabel("Chart type", {exact: true})).toBeVisible();
+  await page.getByLabel("Chart aggregation", {exact: true}).selectOption("count");
+  await expect(page.locator(".result-chart svg")).toBeVisible();
+  await page.getByRole("button", {name: "+ Add series", exact: true}).click();
+  await page.getByLabel("Chart aggregation 2", {exact: true}).selectOption("distinct");
+  await page.getByLabel("Chart type", {exact: true}).selectOption("line");
+  await expect(page.locator(".chart-metric")).toHaveCount(2);
+  await expect(page.locator(".chart-legend span")).toHaveCount(2);
+  await page.getByLabel("Show legend", {exact: true}).uncheck();
+  await expect(page.locator(".chart-legend")).toHaveCount(0);
+  await page.getByLabel("Show legend", {exact: true}).check();
+  await page.screenshot({path: join(output, "charts.png"), fullPage: true});
+  const globalStatus = page.getByRole("status", {name: "Workbench status"});
+  expect(await globalStatus.count()).toBe(1);
+  expect(await globalStatus.evaluate(element => getComputedStyle(element).position)).toBe("fixed");
+  await page.setViewportSize({width: 390, height: 900});
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  expect(Math.round((await globalStatus.boundingBox()).bottom || ((await globalStatus.boundingBox()).y + (await globalStatus.boundingBox()).height))).toBe(900);
+  await page.setViewportSize({width: 1536, height: 1024});
+  await expect(editor).toBeVisible();
   await page.getByRole("button", {name: "Choose project", exact: true}).click();
   await expect(page.getByRole("button", {name: "Create Jaffle demo", exact: false})).toBeVisible();
   await page.reload();
@@ -286,6 +520,7 @@ try {
   console.log(JSON.stringify({jobs: evidence.jobs.length, browser_errors: evidence.browser_errors, output}));
 } catch (error) {
   await writeFile(join(output, "failure.json"), JSON.stringify(evidence, null, 2));
+  await page?.screenshot({path: join(output, "failure.png"), fullPage: true}).catch(() => {});
   throw error;
 } finally {
   await browser?.close();

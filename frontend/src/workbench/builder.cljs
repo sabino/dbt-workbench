@@ -67,6 +67,37 @@
         (select-control title (str value) [["true" "True"] ["false" "False"]] #(on-change (= % "true")))
         (dom/input #js {:aria-label title :type (if (= kind "number") "number" "text") :value (if parameter? (label (second value)) (or value ""))
                         :onChange #(let [text (.. % -target -value)] (on-change (case kind "number" (if (str/blank? text) 0 (js/Number text)) "parameter" [:param (keyword text)] text)))})))))
+(defn data-canvas [query catalog on-change]
+  (let [sources (cons (first (:from query)) (map (comp first second) (partition 2 (:join-by query))))
+        selected (columns query)
+        metrics (aggregates query)]
+    (dom/section #js {:className "builder-data-canvas" :aria-label "Data canvas"}
+      (dom/h3 {} "Data canvas")
+      (dom/div #js {:className "data-canvas-flow"}
+        (map-indexed
+          (fn [index source]
+            (let [relation (first (filter #(= (:name %) (label (source-name source))) catalog))
+                  qualifier (label (or (source-alias source) (source-name source)))
+                  join (nth (vec (partition 2 (:join-by query))) (dec index) nil)]
+              (dom/div #js {:key index :className "data-canvas-pair"}
+                (when join (dom/div #js {:className "data-canvas-edge"}
+                             (dom/span {} (case (first join) :join "Inner join" :left "Left join" :right "Right join" :full "Full join"))
+                             (dom/small {} (str (label (second (second (second join)))) " = " (label (nth (second (second join)) 2))))))
+                (dom/div #js {:className "data-relation"}
+                  (dom/div #js {:className "data-relation-title"} (dom/strong {} (label (source-name source))) (when (source-alias source) (dom/small {} (str "as " qualifier))))
+                  (dom/div #js {:className "data-relation-fields"}
+                    (map (fn [column]
+                           (let [field (keyword (str qualifier "." (:name column)))
+                                 unqualified (keyword (:name column))
+                                 checked (boolean (some #{:* field unqualified} selected))]
+                             (dom/label #js {:key (:name column)}
+                               (dom/input #js {:type "checkbox" :aria-label (str "Select " (label field)) :checked checked
+                                               :onChange #(let [base (if (some #{:*} selected) (available-fields catalog query) selected)
+                                                                fields (if (.. % -target -checked) (conj (vec (remove #{field unqualified} base)) field)
+                                                                         (vec (remove #{field unqualified} base)))]
+                                                            (on-change (set-projections query (concat fields metrics))))})
+                               (dom/span {} (:name column)) (dom/small {} (:type column))))) (:columns relation))))))) sources)))))
+
 (defn query-builder [query catalog on-change]
   (let [fields (available-fields catalog query) source (first (:from query)) all-columns (columns query) metrics (aggregates query)
         conditions (filters query) groups (:group-by query) sorts (:order-by query) joins (vec (partition 2 (:join-by query)))
@@ -79,6 +110,7 @@
           (select-control "Source table" (source-name source) (mapv #(vector (:name %) (:name %)) catalog)
             #(on-change {:select [:*] :from [(keyword %)]}))
           (dom/span #js {:className "muted"} "Choose a table, then shape the query below.")))
+      (data-canvas query catalog on-change)
       (section "Columns"
         (dom/div {}
           (dom/div #js {:className "builder-chips"}

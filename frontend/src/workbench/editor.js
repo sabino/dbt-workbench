@@ -95,19 +95,42 @@ export function focusQueryEditor() {
   document.querySelector(".query-code-editor .cm-content")?.focus();
 }
 
+function completeDbt(context) {
+  const word = context["matchBefore"](/\w*/);
+  if (!word || (!context["explicit"] && word["from"] === word["to"])) return null;
+  return {"from": word["from"], "options": [
+    {"label": "source", "type": "function", "detail": "dbt function", "info": "source(name, table): reference a declared source relation. Example: {{ source('jaffle_shop', 'customers') }}"},
+    {"label": "ref", "type": "function", "detail": "dbt function", "info": "ref(model): reference a dbt model and track its dependency. Example: {{ ref('stg_customers') }}"},
+    {"label": "config", "type": "function", "detail": "dbt function", "info": "Configure this model, such as materialized='view'."},
+    {"label": "var", "type": "function", "detail": "dbt function", "info": "Read a variable from dbt project configuration."},
+    {"label": "env_var", "type": "function", "detail": "dbt function", "info": "Read an environment variable during dbt compilation."},
+    {"label": "this", "type": "variable", "detail": "dbt relation", "info": "The relation corresponding to this model."},
+    {"label": "is_incremental", "type": "function", "detail": "dbt function", "info": "Whether this run is an incremental model update."}
+  ]};
+}
+
+function createLanguage(props) {
+  if (props["format"] === "text") return [];
+  if (props["format"] !== "sql") return clojure();
+  const support = sql({dialect: PostgreSQL, schema: props["schema"] || {}});
+  return props["file"] ? [support, support.language.data.of({"autocomplete": completeDbt})] : support;
+}
+
 export function QueryEditor(props) {
   const host = React.useRef(null);
   const view = React.useRef(null);
   const callbacks = React.useRef(props);
   callbacks.current = props;
   const language = React.useRef(new Compartment());
+  const readOnly = React.useRef(new Compartment());
+  const schema = JSON.stringify(props["schema"] || {});
   function runEditor(editor, all) {
     const selection = editor["state"]["selection"]["main"];
     callbacks.current["onRun"](all, editor["state"]["doc"].toString(),
       {"from": selection["from"], "to": selection["to"], "head": selection["head"]});
   }
   function highlightStatement(editor) {
-    if (callbacks.current["format"] !== "sql") return Decoration.none;
+    if (callbacks.current["file"] || callbacks.current["format"] !== "sql") return Decoration.none;
     const selection = editor["state"]["selection"]["main"];
     if (!selection["empty"]) return Decoration.none;
     const range = statementRanges(editor["state"]["doc"].toString()).find(range => selection["head"] >= range.from && selection["head"] <= range.to);
@@ -130,9 +153,11 @@ export function QueryEditor(props) {
             this.decorations = highlightStatement(update["view"]);
           }};
         }, {decorations: function getDecorations(plugin) { return plugin.decorations; }}),
-        language.current.of(props["format"] === "sql" ? sql({dialect: PostgreSQL}) : clojure()),
-        EditorView.contentAttributes.of({"aria-label": "Query editor", "spellcheck": "false"}),
+        language.current.of(createLanguage(props)),
+        readOnly.current.of([EditorState.readOnly.of(Boolean(props["readOnly"])), EditorView.editable.of(!props["readOnly"])]),
+        EditorView.contentAttributes.of({"aria-label": props["label"] || "Query editor", "spellcheck": "false"}),
         keymap.of([
+          {key: "Mod-s", run: function saveFile() { if (!callbacks.current["onSave"]) return false; callbacks.current["onSave"](); return true; }},
           {key: "Shift-Enter", run: function runStatement(editor) { runEditor(editor, false); return true; }},
           {key: "F5", run: function runF5(editor) { runEditor(editor, false); return true; }},
           {key: "Mod-Enter", run: function runModEnter(editor) { runEditor(editor, false); return true; }},
@@ -160,7 +185,10 @@ export function QueryEditor(props) {
     }
   }, [props["value"]]);
   React.useEffect(function updateLanguage() {
-    view.current?.["dispatch"]({effects: language.current["reconfigure"](props["format"] === "sql" ? sql({dialect: PostgreSQL}) : clojure())});
-  }, [props["format"]]);
+    view.current?.["dispatch"]({effects: language.current["reconfigure"](createLanguage(props))});
+  }, [props["format"], schema]);
+  React.useEffect(function updateReadOnly() {
+    view.current?.["dispatch"]({effects: readOnly.current["reconfigure"]([EditorState.readOnly.of(Boolean(props["readOnly"])), EditorView.editable.of(!props["readOnly"])])});
+  }, [props["readOnly"]]);
   return React.createElement("div", {ref: host, className: "query-code-editor"});
 }

@@ -8,7 +8,12 @@
             [dbt-workbench.runtime :as runtime]
             [dbt-workbench.storage :as storage]
             [dbt-workbench.workspace :as workspace]
-            [dbt-workbench.validation :as validation])
+            [dbt-workbench.validation :as validation]
+            [dbt-workbench.inspection :as inspection]
+            [dbt-workbench.git :as git]
+            [dbt-workbench.github :as github]
+            [dbt-workbench.connections :as connections]
+            [dbt-workbench.snow-cli :as snow-cli])
   (:import (com.sun.net.httpserver HttpServer HttpExchange HttpHandler)
            (java.net InetSocketAddress URLDecoder URI)
            (java.nio.charset StandardCharsets)
@@ -35,18 +40,63 @@
   (let [directory (:directory app) engine (:runtime app) segments (vec (remove str/blank? (text/split-on path "/")))
         [_ area id action detail] segments]
     (case area
-      "health" (json-response {:status "ok" :version "0.2.0" :backend "clojure" :query_processor "honeysql+jdbc" :preview_engines ["duckdb" "sqlite"]})
+      "health" (json-response {:status "ok" :version "0.2.0" :backend "clojure" :query_processor "honeysql+jdbc" :preview_engines ["duckdb" "sqlite" "snowflake" "federated"]})
       "projects"
       (do
         (when (and id (not (#{"demo" "open"} id))) (workspace/find-project directory id))
-        (when (and (= "POST" method) (not (or (#{"demo" "open"} id) (#{"jobs" "query" "baseline"} action)))) (storage/fail! "Method not allowed." 405))
+        (when (and (= "POST" method) (not (or (#{"demo" "open"} id) (#{"jobs" "query" "baseline" "github" "git" "connections" "routing"} action)))) (storage/fail! "Method not allowed." 405))
         (cond
         (and (= "GET" method) (nil? id)) (json-response {:projects (workspace/list-projects directory)})
         (and (= "POST" method) (= id "demo")) (json-response (workspace/create-demo! directory) 201)
         (and (= "POST" method) (= id "open")) (json-response (do (validation/validate! :open body) (workspace/open-project! directory (:path body) (:profiles_dir body))) 201)
-        (nil? action) (json-response (assoc (workspace/find-project directory id) :targets (workspace/list-targets directory id) :baseline (workspace/read-baseline directory id)))
+        (nil? action) (json-response (assoc (workspace/find-project directory id) :targets (mapv :id (connections/list-connections directory id)) :baseline (workspace/read-baseline directory id)))
+        (= action "lineage") (if (= method "GET") (json-response (inspection/read-lineage directory id)) (storage/fail! "Method not allowed." 405))
+        (= action "documentation") (if (= method "GET") (json-response (inspection/read-resource directory id (or (:resource_id query) (:model_id query)))) (storage/fail! "Method not allowed." 405))
+        (= action "runs") (if (= method "GET") (json-response (inspection/read-job directory id engine detail)) (storage/fail! "Method not allowed." 405))
+        (= action "connections")
+        (case method
+          "GET" (json-response (cond (= detail "cli") {:connections (snow-cli/list-configured!)}
+                                     detail (connections/read-schema! directory id detail)
+                                     :else {:connections (connections/list-connections directory id)}))
+          "POST" (cond
+                   (= detail "test") (json-response (connections/test-connection! directory id (:id (validation/validate! :connection-id body))))
+                   (= detail "cli") (locking engine (runtime/require-idle! engine id) (json-response (connections/import-cli! directory id (validation/validate! :cli-connection body))))
+                   :else (locking engine (runtime/require-idle! engine id) (json-response (connections/save-connection! directory id (validation/validate! :connection body)))))
+          "DELETE" (locking engine (runtime/require-idle! engine id) (json-response (connections/remove-connection! directory id detail)))
+          (storage/fail! "Method not allowed." 405))
+        (= action "routing")
+        (case method
+          "GET" (json-response (connections/read-routing directory id))
+          "POST" (let [routing (validation/validate! :routing body)]
+                   (if (= detail "validate") (json-response (connections/validate-routing! directory id routing))
+                     (locking engine (runtime/require-idle! engine id) (json-response (connections/save-routing! directory id routing)))))
+          (storage/fail! "Method not allowed." 405))
+        (= action "github")
+        (case method
+          "GET" (json-response (case detail
+                                 "pulls" (github/list-pull-requests directory id)
+                                 "checks" (github/read-checks directory id (integer-option (:number query) nil 1 2147483647))
+                                 (github/detect directory id)))
+          "POST" (locking engine (runtime/require-idle! engine id) (json-response (github/create-draft! directory id (validation/validate! :pull-request body))))
+          (storage/fail! "Method not allowed." 405))
+        (= action "git")
+        (case method
+          "GET" (json-response (if (= detail "diff") (git/read-diff directory id (select-keys query [:path :source :base_branch])) (git/read-state directory id)))
+          "POST" (locking engine
+                   (runtime/require-idle! engine id)
+                   (json-response
+                     (case detail
+                       "stage" (git/stage! directory id (:path (validation/validate! :git-path body)))
+                       "unstage" (git/unstage! directory id (:path (validation/validate! :git-path body)))
+                       "branch" (git/create-branch! directory id (:branch (validation/validate! :git-branch body)))
+                       "switch" (git/switch-branch! directory id (:branch (validation/validate! :git-branch body)))
+                       "rebase" (git/rebase! directory id (:branch (validation/validate! :git-branch body)))
+                       "cherry-pick" (git/cherry-pick! directory id (:commit (validation/validate! :git-commit-id body)))
+                       "commit" (git/commit! directory id (:message (validation/validate! :git-commit body)))
+                       (storage/fail! "Git action not found." 404))))
+          (storage/fail! "Method not allowed." 405))
         (= action "models") (json-response {:models (workspace/list-models directory id)})
-        (= action "catalog") (json-response (processor/read-catalog! directory id (:target query)))
+        (= action "catalog") (json-response (if (or (= detail "resources") (= (:detail query) "resources")) (inspection/read-catalog directory id) (processor/read-catalog! directory id (:target query))))
         (= action "files") (json-response {:files (workspace/list-files directory id)})
         (= action "file") (case method
                             "GET" (json-response (workspace/read-file directory id (:path query)))
@@ -61,7 +111,15 @@
                                 (storage/fail! "Method not allowed." 405))
         (= action "results") (json-response {:results (runtime/list-results engine id)})
         :else (storage/fail! "API route not found." 404)))
-      "jobs" (case action nil (json-response (runtime/find-job engine id))
+      "jobs" (case action "artifacts"
+                 (let [job (runtime/find-job engine id)
+                       inspected (inspection/read-job directory (:project_id job) engine id)
+                       run (first (filter #(= (:run query) (:name %)) (:runs inspected)))
+                       artifact (first (filter #(= (:name query) (:name %)) (:artifacts run)))]
+                   (when-not artifact (storage/fail! "Run artifact not found." 404))
+                   {:status 200 :type "application/octet-stream" :headers {"Content-Disposition" (str "attachment; filename=" (:name artifact))}
+                    :body (java.nio.file.Files/readAllBytes (.toPath (io/file (:path artifact))))})
+                 nil (json-response (runtime/find-job engine id))
                         "events" (json-response {:events (runtime/list-events engine id (integer-option (:after query) 0 0 Long/MAX_VALUE))})
                         "cancel" (if (= method "POST") (json-response (runtime/cancel-job! engine id)) (storage/fail! "Method not allowed." 405))
                         (storage/fail! "API route not found." 404))

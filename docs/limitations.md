@@ -1,24 +1,71 @@
 # Execution limits
 
-Interactive queries read local DuckDB profiles. Native dbt platform support is separate from JDBC preview support.
-SQLite previews capture at most 50,000 rows per input relation.
-Results default to 10,000 rows, with a maximum of 100,000. Queries default to a 30-second deadline.
-Truncated captures cannot prove complete result equality.
+Interactive execution supports DuckDB, Snowflake JDBC, imported Snow CLI connections, and bounded federation.
+Native dbt platform support remains separate. Builds use profile targets and can write to their databases.
 
-Only validated SELECT/WITH queries run in Query lab. Jinja requires dbt compilation first.
-The parser accepts a bounded SQL vocabulary and refuses unrecognized functions or unsafe constructs.
-DuckDB-specific grammar beyond JSqlParser's vocabulary can require a simpler equivalent query.
-SQL-to-EDN supports a bounded HoneySQL grammar. Unsupported AST nodes retain the SQL draft with a diagnostic.
-Formatting and comments belong to the saved SQL draft; EDN expresses query meaning as plain data.
-Visual mode supports one source, ordered joins, columns, basic aggregations, filters, grouping, sorting, and limits.
-CTEs, query batches, nested expressions, and other advanced forms remain in SQL or EDN.
-Native SQL-to-SQLite execution can differ in date, type, collation, and numeric behavior.
-Native division is refused. Structured EDN division declares floating-point, NULL-on-zero semantics.
+## Queries and captures
 
-Baseline artifacts do not snapshot rows. Replay restores inputs, not a historical source database.
-JSON decimal values preserve decimal text; downstream consumers should retain column type metadata.
-Legacy Arrow results remain in metadata but need rerunning through JDBC to inspect rows.
-Changes history covers workbench saves. External edits are detected through revision conflicts, not automatically archived.
+| Path | Boundary |
+| --- | --- |
+| Query results | Default 10,000 rows; maximum 100,000 |
+| Query deadline | Default 30 seconds; greater than zero and less than 121 seconds |
+| SQLite preview | Up to 50,000 copied rows per DuckDB input relation |
+| Federation | Maximum 16 physical input relations; 50,000 rows per relation |
+| Snow CLI | Bounded SELECT/WITH; maximum 32 MiB per captured output stream |
 
-The app uses an instance lock within its data directory. Run one server per directory.
-Forced termination can leave a native dbt child process; inspect active jobs before restarting shared data.
+Only validated SELECT/WITH queries run in Query lab. Compile dbt Jinja before querying it.
+Unsupported SQL functions, syntax, or conversion nodes fail with a diagnostic.
+SQL-to-EDN and Visual mode support bounded grammars. Keep advanced expressions in SQL or supported EDN.
+Visual mode excludes query batches, CTEs, and unsupported nested expressions.
+
+SQLite copies can truncate input relations. Its date, type, collation, and numeric semantics can differ from DuckDB.
+Native division is refused in SQLite. Structured division specifies floating-point results and NULL on zero.
+
+Federation copies source relations sequentially, then joins them in isolated DuckDB.
+It refuses oversized inputs instead of silently truncating them. Filter large inputs through source views before joining.
+Final query filters do not reduce source captures.
+Captures have no shared snapshot or transaction, so sources can change between reads.
+Supported scalar types retain declared JDBC types. Unsupported or ambiguous types require explicit source casts or views.
+Decimal precision is capped at 38. Repeated table names require explicit aliases.
+Snow CLI connections cannot participate in federation.
+
+## Snowflake and authentication
+
+Snowflake JDBC supports password, OAuth, and private-key-file authentication.
+Browser authentication is unsupported. Set referenced environment variables before starting the server.
+Saved interactive connections do not create dbt profile targets.
+
+Snow CLI import stores a local configuration reference, not copied credentials.
+Authentication must already work in the configured CLI environment.
+Results infer types from JSON values; empty results cannot supply declared column metadata.
+Named and positional parameters are rendered through validated literals before execution.
+Cancellation stops the local CLI process. Server-side cancellation remains unconfirmed, including on timeout.
+
+Local tests cover supported execution boundaries. External Snowflake JDBC, cross-engine remote federation,
+and GitHub end-to-end behavior require separate verification.
+A generic CLI SELECT check is covered separately in the [verification record](verification.md).
+It establishes neither server-side cancellation nor remote federation correctness.
+
+## Results and persistence
+
+Compare checks captured rows and schemas. Truncation prevents proof of complete source equality.
+Baseline artifacts do not snapshot rows. Replay restores inputs, not historical database contents.
+JSON decimal values preserve decimal text; consumers must retain column type metadata.
+Run comparison covers recorded model/test outcomes and timing, not row differences.
+
+Documentation depends on existing dbt artifacts. Parse or build after source changes to refresh the manifest.
+Catalog and run results are selected from available artifacts by file modification time.
+Source freshness is displayed only from existing `sources.json` results; the app does not launch freshness checks.
+
+Saved query drafts and formatting preferences live in one browser. Export drafts before clearing browser storage.
+Changes archives workbench saves. External edits trigger revision conflicts but are not automatically archived.
+Legacy Arrow results require rerunning their saved queries through JDBC.
+
+## Git and runtime
+
+Branch switches, rebase, and cherry-pick require a clean local tree.
+Resolve or abort Git conflicts in your terminal. GitHub draft creation requires an already published matching branch.
+Remote push, merge, deployment, and background GitHub polling are outside the workbench workflow.
+
+Run one server per data directory. The instance lock prevents shared-directory servers.
+Forced termination can leave a native dbt child process. Inspect active work before restarting shared data.

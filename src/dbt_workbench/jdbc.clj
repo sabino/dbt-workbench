@@ -20,12 +20,12 @@
     (bind! statement parameters)
     (.execute statement)
     (.getUpdateCount statement)))
-(defn read-result! [^ResultSet result max-rows]
+(defn read-result! [^ResultSet result max-rows & [value-fn]]
   (let [metadata (.getMetaData result) count (.getColumnCount metadata)
-        columns (mapv (fn [index] {:name (.getColumnLabel metadata index) :type (.getColumnTypeName metadata index)}) (range 1 (inc count)))]
+        columns (mapv (fn [index] {:name (.getColumnLabel metadata index) :type (.getColumnTypeName metadata index) :precision (.getPrecision metadata index) :scale (.getScale metadata index)}) (range 1 (inc count)))]
     (loop [rows []]
       (if (and (< (clojure.core/count rows) max-rows) (.next result))
-        (recur (conj rows (mapv #(json-value (.getObject result (int %))) (range 1 (inc count)))))
+        (recur (conj rows (mapv #((or value-fn json-value) (.getObject result (int %))) (range 1 (inc count)))))
         {:columns columns :rows rows :row_count (clojure.core/count rows) :truncated (.next result)}))))
 (defn query! [connection sql & [parameters max-rows]]
   (with-open [statement (.prepareStatement ^java.sql.Connection connection sql)]

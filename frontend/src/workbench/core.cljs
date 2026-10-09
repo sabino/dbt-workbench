@@ -28,29 +28,35 @@
             ["@phosphor-icons/react/dist/csr/ArrowsOutSimple" :as expand-icon]
             ["@phosphor-icons/react/dist/csr/Circle" :as circle-icon]
             ["@phosphor-icons/react/dist/csr/Sun" :as sun-icon]
+            ["@phosphor-icons/react/dist/csr/SidebarSimple" :as sidebar-icon]
             ["./editor.js" :as editor]
+            ["./panels.js" :as panels]
+            ["./query-library.js" :as query-library]
+            ["./workspace-ui.js" :as workspace-ui]
             [com.fulcrologic.fulcro.application :as app]
             [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
             [com.fulcrologic.fulcro.dom :as dom]
             [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]))
 
 (declare application load-project! load-file! select-model! select-job! load-result!
-         submit! refresh-project! save-file! create-demo! open-project! cancel-job! import-baseline! convert-query! load-query! load-changes! run-query! json-display load-catalog! format-query! save-format-options!)
+         submit! refresh-project! save-file! create-demo! open-project! cancel-job! import-baseline! convert-query! load-query! load-changes! run-query! json-display close-file! update-file-content! load-catalog! format-query! save-format-options!)
 
 (def default-edn "{:select [:customer_id [[:sum :amount] :revenue]]\n :from [:orders]\n :group-by [:customer_id]\n :order-by [[:customer_id :asc]]}")
 (def default-sql "SELECT customer_id, SUM(amount) AS revenue\nFROM orders\nGROUP BY customer_id\nORDER BY customer_id")
+(defonce file-load-counter (atom 0))
 (def initial
-  {:ui/theme "system" :ui/projects [] :ui/project nil :ui/models [] :ui/jobs [] :ui/files []
+  {:ui/inspector nil :ui/bottom-tab "results" :ui/sidebar-collapsed false :ui/sidebar-width 200 :ui/context-width 390 :ui/files-width 390 :ui/files-split 34 :ui/file-view "models" :ui/files-search "" :ui/explorer-visible true
+   :ui/open-files [] :ui/status-job nil :ui/results-view "data" :ui/compare-result nil :ui/theme "system" :ui/projects [] :ui/project nil :ui/models [] :ui/jobs [] :ui/files []
    :ui/results [] :ui/target "dev" :ui/defer true :ui/favor-state false
-   :ui/tab "model" :ui/model-id nil :ui/file nil :ui/content "" :ui/saved-content ""
+   :ui/tab "query" :ui/model-id nil :ui/file nil :ui/loading-file nil :ui/content "" :ui/saved-content ""
    :ui/selected-job nil :ui/events [] :ui/event-cursor 0 :ui/result nil :ui/page nil
    :ui/error nil :ui/notice nil :ui/submitting false :ui/open-path "" :ui/profiles ""
    :ui/catalog [] :ui/visual-query nil :ui/format-options {:keywordCase "upper" :useTabs false :tabWidth 2 :indentStyle "standard" :logicalOperatorNewline "before" :expressionWidth 50 :linesBetweenQueries 2}
-   :ui/query-format "sql" :ui/query-edn default-edn :ui/query-sql default-sql
+   :ui/max-rows 10000 :ui/timeout 30 :ui/query-split 50 :ui/query-format "sql" :ui/query-edn default-edn :ui/query-sql default-sql
    :ui/parameters "{\"status\": \"completed\"}" :ui/sql-parameters "{}" :ui/dialect "duckdb" :ui/baseline-input false
    :ui/editor-revision 0 :ui/query-job nil :ui/query-requesting false :ui/query-selection {:from 0 :to 0 :head 0} :ui/converting false :ui/conversion-note nil
-   :ui/model-search "" :ui/build-scope "project" :ui/activity-tab "activity" :ui/changes [] :ui/job-filter "all"
-   :ui/left-result "" :ui/right-result "" :ui/compare-keys "" :ui/conflict false :ui/artifact-dir "" :ui/reference-target "prod"})
+   :ui/build-scope "project" :ui/changes [] :ui/job-filter "all"
+   :ui/right-result "" :ui/compare-keys "" :ui/conflict false :ui/artifact-dir "" :ui/reference-target "prod"})
 
 (defmutation change [{:keys [updates]}]
   (action [{:keys [state]}] (swap! state merge updates)))
@@ -72,7 +78,9 @@
 (defn value! [key event] (patch! {key (.. event -target -value)}))
 (defn checked! [key event] (patch! {key (.. event -target -checked)}))
 (defn project-id [] (get-in (current) [:ui/project :id]))
-(defn dirty? [] (not= (:ui/content (current)) (:ui/saved-content (current))))
+(defn dirty? []
+  (or (not= (:ui/content (current)) (:ui/saved-content (current)))
+      (some #(not= (:draft %) (:content %)) (:ui/open-files (current)))))
 (defn may-discard? [] (or (not (dirty?)) (js/confirm "Discard the unsaved changes in this editor?")))
 (defn api-path [suffix] (str "/api/projects/" (project-id) suffix))
 (defn human-error [x]
@@ -100,6 +108,29 @@
 (defn save-preference! [key value]
   (try (if value (js/localStorage.setItem key value) (js/localStorage.removeItem key))
        (catch :default _ nil)))
+(def layout-limits
+  {:ui/sidebar-width [160 300] :ui/context-width [280 780] :ui/files-width [260 820]
+   :ui/query-split [25 75] :ui/files-split [20 70]})
+(def layout-keys (conj (vec (keys layout-limits)) :ui/sidebar-collapsed :ui/explorer-visible :ui/file-view))
+(defn save-layout! [updates]
+  (patch! updates)
+  (save-preference! "workbench.layout" (pr-str (select-keys (current) layout-keys))))
+(defn load-layout! []
+  (try
+    (when-let [saved (read-preference "workbench.layout")]
+      (let [layout (reader/read-string saved)
+            sizes (reduce-kv (fn [values key [minimum maximum]]
+                               (let [value (get layout key)]
+                                 (if (and (number? value) (js/isFinite value))
+                                   (assoc values key (max minimum (min maximum value))) values))) {} layout-limits)
+            switches (into {} (filter (fn [[_ value]] (boolean? value)) (select-keys layout [:ui/sidebar-collapsed :ui/explorer-visible])))
+            file-view (:ui/file-view layout)]
+        (patch! (cond-> (merge sizes switches) (#{"models" "all"} file-view) (assoc :ui/file-view file-view)))))
+    (catch :default _ nil)))
+(defn inspect-view! [view]
+  (if (#{"results" "lineage" "activity" "changes" "runs"} view)
+    (patch! {:ui/bottom-tab view})
+    (patch! {:ui/inspector view})))
 (defn apply-theme! [preference]
   (let [dark? (or (= preference "dark")
                   (and (= preference "system") (.-matches (js/window.matchMedia "(prefers-color-scheme: dark)"))))]
@@ -110,8 +141,9 @@
   (patch! {:ui/theme preference}))
 (defn choose-project! []
   (when (may-discard?)
+    (swap! file-load-counter inc)
     (save-preference! "workbench.project" nil)
-    (patch! {:ui/project nil :ui/error nil :ui/notice nil :ui/content "" :ui/saved-content ""})))
+    (patch! {:ui/project nil :ui/file nil :ui/loading-file nil :ui/open-files [] :ui/model-id nil :ui/inspector nil :ui/error nil :ui/notice nil :ui/content "" :ui/saved-content ""})))
 (defn load-projects! []
   (-> (request! "GET" "/api/projects")
     (.then #(patch! {:ui/projects (:projects %)})) (.catch report-error!)))
@@ -126,7 +158,11 @@
     (.then #(when (= id (project-id)) (patch! {:ui/files (:files %)}))) (.catch report-error!)))
 (defn load-results! [id]
   (-> (request! "GET" (str "/api/projects/" id "/results"))
-    (.then #(when (= id (project-id)) (patch! {:ui/results (:results %)}))) (.catch report-error!)))
+    (.then (fn [data]
+             (when (= id (project-id))
+               (patch! {:ui/results (:results data)})
+               (when (nil? (:ui/result (current)))
+                 (when-let [result (first (remove #(= "compare" (:kind %)) (:results data)))] (load-result! (:id result))))))) (.catch report-error!)))
 (defn load-changes! [id]
   (-> (request! "GET" (str "/api/projects/" id "/changes"))
     (.then #(when (= id (project-id)) (patch! {:ui/changes (:changes %)})))
@@ -138,15 +174,16 @@
     (load-models! id) (load-files! id) (load-results! id) (load-changes! id) (load-catalog!)))
 (defn load-project! [id]
   (when (may-discard?)
-    (patch! {:ui/error nil :ui/notice nil :ui/file nil :ui/content "" :ui/saved-content ""
-           :ui/models [] :ui/jobs [] :ui/events [] :ui/event-cursor 0 :ui/selected-job nil :ui/query-job nil :ui/query-requesting false
+    (swap! file-load-counter inc)
+    (patch! {:ui/error nil :ui/notice nil :ui/file nil :ui/loading-file nil :ui/content "" :ui/saved-content ""
+           :ui/open-files [] :ui/inspector nil :ui/bottom-tab "results" :ui/status-job nil :ui/compare-result nil :ui/models [] :ui/jobs [] :ui/events [] :ui/event-cursor 0 :ui/selected-job nil :ui/query-job nil :ui/query-requesting false
            :ui/result nil :ui/page nil :ui/results [] :ui/model-id nil :ui/conflict false :ui/changes [] })
   (-> (request! "GET" (str "/api/projects/" id))
     (.then (fn [project]
              (let [targets (:targets project)
                    target (if (some #{"dev"} targets) "dev" (or (first targets) "dev"))]
                (save-preference! "workbench.project" id)
-               (patch! {:ui/project project :ui/target target :ui/tab "model" :ui/left-result "" :ui/right-result ""})
+               (patch! {:ui/project project :ui/target target :ui/tab "query" :ui/right-result ""})
                (load-projects!) (load-models! id) (load-files! id) (load-results! id) (load-changes! id) (load-catalog!))))
     (.catch report-error!))))
 (defn create-demo! []
@@ -161,26 +198,46 @@
         (-> (request! "POST" "/api/projects/open"
               (cond-> {:path path} (not (str/blank? (:ui/profiles s))) (assoc :profiles_dir (:ui/profiles s))))
           (.then #(do (patch! {:ui/submitting false}) (load-project! (:id %)))) (.catch report-error!))))))
+(defn update-file-content! [path content]
+  (patch! (cond-> {:ui/open-files (mapv #(if (= path (:path %)) (assoc % :draft content) %) (:ui/open-files (current)))}
+            (= path (get-in (current) [:ui/file :path])) (assoc :ui/content content))))
+(defn activate-file! [file]
+  (swap! file-load-counter inc)
+  (patch! {:ui/file (dissoc file :draft) :ui/loading-file nil :ui/content (:draft file (:content file)) :ui/saved-content (:content file)
+           :ui/model-id (:unique_id (first (filter #(= (:path file) (:path %)) (vals (:model/id (current))))))
+           :ui/tab "query" :ui/conflict false :ui/error nil}))
+(defn close-file! [path]
+  (let [files (:ui/open-files (current)) file (first (filter #(= path (:path %)) files))]
+    (when (or (= (:draft file) (:content file)) (js/confirm "Discard the unsaved changes in this file?"))
+      (let [remaining (filterv #(not= path (:path %)) files)]
+        (patch! {:ui/open-files remaining})
+        (when (= path (get-in (current) [:ui/file :path]))
+          (if-let [next-file (last remaining)] (activate-file! next-file)
+            (patch! {:ui/file nil :ui/content "" :ui/saved-content "" :ui/model-id nil})))))))
 (defn load-file! [path & [draft]]
-  (when (may-discard?)
-    (let [id (project-id)]
-    (-> (request! "GET" (str "/api/projects/" id "/file?path=" (js/encodeURIComponent path)))
-      (.then (fn [file]
-               (when (= id (project-id))
-                 (patch! {:ui/file file :ui/content (if draft (:content draft) (:content file))
-                           :ui/saved-content (:content file)
-                          :ui/model-id (:unique_id (first (filter #(= path (:path %)) (vals (:model/id (current))))))
-                          :ui/tab "model" :ui/conflict false :ui/error nil}))))
-      (.catch report-error!)))))
+  (let [id (project-id) opened (first (filter #(= path (:path %)) (:ui/open-files (current))))]
+    (if (and opened (nil? draft)) (activate-file! opened)
+      (let [request-id (swap! file-load-counter inc)]
+        (patch! {:ui/loading-file path})
+        (-> (request! "GET" (str "/api/projects/" id "/file?path=" (js/encodeURIComponent path)))
+          (.then (fn [file]
+                   (when (and (= id (project-id)) (= request-id @file-load-counter))
+                     (let [file (assoc file :draft (if draft (:content draft) (:content file)))]
+                       (patch! {:ui/open-files (conj (filterv #(not= path (:path %)) (:ui/open-files (current))) file)})
+                       (activate-file! file)))))
+          (.catch (fn [error]
+                    (when (= request-id @file-load-counter)
+                      (patch! {:ui/loading-file nil}) (report-error! error)))))))))
 (defn select-model! [model]
   (when (:path model) (load-file! (:path model))))
 (defn save-file! []
   (let [s (current) file (:ui/file s)]
-    (when file
+    (when (and file (nil? (:ui/loading-file s)))
       (patch! {:ui/submitting true :ui/error nil})
       (-> (request! "PUT" (api-path "/file")
             {:path (:path file) :content (:ui/content s) :expected_revision (:revision file)})
         (.then #(do (patch! {:ui/file % :ui/saved-content (:content %) :ui/content (:content %)
+                            :ui/open-files (mapv (fn [opened] (if (= (:path opened) (:path %)) (assoc % :draft (:content %)) opened)) (:ui/open-files (current)))
                             :ui/submitting false :ui/conflict false :ui/notice "File saved to your project."})
                      (load-models! (project-id)) (load-changes! (project-id))))
         (.catch (fn [e]
@@ -195,9 +252,8 @@
   (patch! {:ui/submitting true :ui/query-requesting (= "query" kind) :ui/error nil :ui/notice nil})
   (-> (request! "POST" (api-path "/jobs") {:kind kind :options (merge (job-options) options)})
     (.then (fn [job]
-             (patch! (cond-> {:ui/submitting false :ui/query-requesting false} (= "query" kind) (assoc :ui/query-job (:id job))))
-             (select-job! (:id job))
-             (when (#{"preview" "compare"} kind) (patch! {:ui/notice "Results will open when the job finishes."}))))
+             (patch! (cond-> {:ui/submitting false :ui/query-requesting false :ui/status-job (:id job)} (= "query" kind) (assoc :ui/query-job (:id job))))
+             (select-job! (:id job))))
     (.catch report-error!)))
 (defn select-job! [id]
   (patch! {:ui/selected-job id :ui/events [] :ui/event-cursor 0}))
@@ -205,12 +261,15 @@
   (-> (request! "POST" (str "/api/jobs/" id "/cancel") {})
     (.then #(when-not (= "query" (:kind %)) (patch! {:ui/notice (str "Cancellation requested for " (:kind %) ".")})))
     (.catch report-error!)))
-(defn load-result! [id & [offset keep-editor?]]
+(defn load-result! [id & [offset _keep-editor?]]
   (let [offset (or offset 0)]
     (-> (js/Promise.all #js [(request! "GET" (str "/api/results/" id))
                              (request! "GET" (str "/api/results/" id "/rows?offset=" offset "&limit=10"))])
       (.then (fn [data]
-               (patch! {:ui/result (aget data 0) :ui/page (aget data 1) :ui/tab (if (or keep-editor? (= "query" (:ui/tab (current)))) (:ui/tab (current)) "results") :ui/error nil})))
+               (let [result (aget data 0) comparison? (= "compare" (:kind result))]
+                 (patch! (if comparison?
+                           {:ui/compare-result result :ui/compare-page (aget data 1) :ui/bottom-tab "results" :ui/results-view "compare" :ui/error nil}
+                           {:ui/result result :ui/page (aget data 1) :ui/bottom-tab "results" :ui/results-view "data" :ui/compare-result nil :ui/compare-page nil :ui/tab "query" :ui/error nil})))))
       (.catch report-error!))))
 (defn query-parameters [s]
   (let [input (if (= "sql" (:ui/query-format s)) (:ui/sql-parameters s) (:ui/parameters s))
@@ -229,7 +288,7 @@
           (when (or (empty? (:statements input)) (str/blank? (:content input)))
             (throw (js/Error. "Write or select a query to run.")))
           (submit! "query" (merge input {:editor_content content :selection selection
-                                         :format format :editor_mode mode :dialect (:ui/dialect s) :parameters (query-parameters s)})))
+                                         :format format :editor_mode mode :dialect (:ui/dialect s) :max_rows (:ui/max-rows s) :timeout_seconds (:ui/timeout s) :parameters (query-parameters s)})))
         (catch :default e (report-error! e))))))
 
 (defn load-catalog! []
@@ -304,7 +363,7 @@
     (submit! "preview" {:model_id (:ui/model-id s) :dialect (:ui/dialect s) :baseline (:ui/baseline-input s)})))
 (defn run-compare! []
   (let [s (current)]
-    (submit! "compare" {:left_result_id (:ui/left-result s) :right_result_id (:ui/right-result s)
+    (submit! "compare" {:left_result_id (get-in s [:ui/result :id]) :right_result_id (:ui/right-result s)
                         :key_columns (into [] (remove str/blank?) (map str/trim (.split (:ui/compare-keys s) ",")))})))
 (defn import-baseline! []
   (let [s (current)]
@@ -363,7 +422,7 @@
 (defn icon [name]
   (dom/span #js {:className (str "icon icon-" name) :aria-hidden true}
     (react/createElement
-      (case name "theme" sun-icon/Sun "play" play-icon/Play "file" file-icon/FileText "model" table-icon/Table
+      (case name "sidebar" sidebar-icon/SidebarSimple "theme" sun-icon/Sun "play" play-icon/Play "file" file-icon/FileText "model" table-icon/Table
         "check" check-icon/Check "arrow" arrow-icon/ArrowUpRight "folder" folder-icon/FolderSimple
         "clock" clock-icon/Clock "close" close-icon/X "plus" plus-icon/Plus "command" command-icon/Command
         "compare" compare-icon/ArrowsLeftRight "database" database-icon/Database "search" search-icon/MagnifyingGlass
@@ -378,6 +437,15 @@
     label))
 (defn pill [label & [class]] (dom/span #js {:className (str "pill " class)} label))
 (defn field-label [label child] (dom/label #js {:className "field"} (dom/span #js {:className "field-label"} label) child))
+(defn floating-menu [label trigger menu-class content & [class-name]]
+  (react/createElement workspace-ui/Popover
+    #js {:label label :trigger trigger :menuClass menu-class :children content :className (or class-name "icon-button")}))
+(defn pane-resizer [props key label axis variable scope & [pane direction]]
+  (let [[minimum maximum] (get layout-limits key)]
+    (react/createElement workspace-ui/PaneResizer
+      #js {:key (name key) :label label :axis axis :variable variable :scope scope :pane pane :direction (or direction 1)
+           :value (get props key) :min minimum :max maximum :default (get initial key) :step (if (= axis "x") 20 5)
+           :unit (if (= axis "x") "px" "%") :onResize #(save-layout! {key %})})))
 (defn checkbox [label key checked]
   (dom/label #js {:className "check-control"}
     (dom/input #js {:type "checkbox" :checked (boolean checked) :onChange #(checked! key %)}) label))
@@ -391,15 +459,15 @@
   (let [model (get-in (current) [:model/id id])]
     (dom/button #js {:className (str "model-row " (when (:active (comp/get-computed this)) "active"))
                      :onClick #(select-model! model) :title (:path model)}
-      (icon "model") (dom/span #js {:className "model-name"} name)
+      (icon "model") (dom/span #js {:className "model-name"} (or (some-> (:path model) (str/split #"/") last) name))
       (when materialized (dom/span #js {:className "model-kind"} materialized)))))
 (def model-row (comp/factory ModelRow {:keyfn :model/id}))
 
-(defsc JobRow [this {:job/keys [id] :keys [kind status created_at started_at finished_at result_id options]}]
+(defsc JobRow [this {:job/keys [id] :keys [kind status created_at started_at finished_at options]}]
   {:query [:job/id :kind :status :created_at :started_at :finished_at :summary :error :result_id :options]
    :ident :job/id}
   (dom/button #js {:className (str "job-row " (when (:active (comp/get-computed this)) "active"))
-                   :onClick #(do (select-job! id) (when result_id (load-result! result_id 0 (= "query" (:ui/tab (current))))))}
+                   :onClick #(select-job! id)}
     (dom/span #js {:className (str "status-dot " status)})
     (dom/span #js {:className "job-copy"}
       (dom/span #js {:className "job-time"} (date-label created_at)
@@ -435,155 +503,93 @@
           (map #(dom/button #js {:key (:id %) :onClick (fn [_] (load-project! (:id %)))}
                   (icon "folder") (dom/span {} (:name %)) (icon "arrow")) (:ui/projects props)))))))
 
-(defn model-tree [models selected prefix]
-  (let [direct (filter #(= prefix (str/join "/" (butlast (str/split (:path %) #"/")))) models)
-        folders (->> models
-                  (map :path)
-                  (filter #(str/starts-with? % (str prefix "/")))
-                  (map #(first (str/split (subs % (inc (count prefix))) #"/")))
-                  (filter #(some (fn [model] (str/starts-with? (:path model) (str prefix "/" % "/"))) models))
-                  distinct sort)]
+(defn file-tree [entries models selected prefix]
+  (let [direct (sort-by :path (filter #(= prefix (str/join "/" (butlast (str/split (:path %) #"/")))) entries))
+        nested (if (str/blank? prefix) entries (filter #(str/starts-with? (:path %) (str prefix "/")) entries))
+        folders (->> nested (map #(subs (:path %) (if (str/blank? prefix) 0 (inc (count prefix)))))
+                  (filter #(str/includes? % "/")) (map #(first (str/split % #"/"))) distinct sort)
+        model-by-path (into {} (map (juxt :path identity) models))]
     (dom/div #js {:className "tree-children"}
-      (map #(model-row (comp/computed % {:active (= (:unique_id %) selected)})) direct)
+      (map (fn [file]
+             (if-let [model (get model-by-path (:path file))]
+               (model-row (comp/computed model {:active (= (:path file) selected)}))
+               (dom/button #js {:className (str "file-row " (when (= (:path file) selected) "active"))
+                                :key (:path file) :title (:path file) :onClick #(load-file! (:path file))}
+                 (icon "file") (dom/span {} (last (str/split (:path file) #"/")))))) direct)
       (map (fn [folder]
-             (dom/details #js {:className "tree-folder" :key (str prefix "/" folder) :open true}
-               (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} folder))
-               (model-tree models selected (str prefix "/" folder)))) folders))))
+             (let [path (if (str/blank? prefix) folder (str prefix "/" folder))]
+               (dom/details #js {:className "tree-folder" :key path :open true}
+                 (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} folder))
+                 (file-tree entries models selected path)))) folders))))
 
 (defn sidebar [props]
-  (let [models (:ui/models props)
-        filtered (filter #(str/includes? (str/lower-case (:name %)) (str/lower-case (:ui/model-search props))) models)
-        files (:ui/files props)
-        targets (or (seq (get-in props [:ui/project :targets])) ["dev"])]
-  (dom/aside #js {:className "sidebar"}
-    (dom/div #js {:className "sidebar-heading"} (dom/span {} "Project")
-      (dom/button #js {:className "icon-button" :title "Refresh project" :onClick refresh-project! :aria-label "Refresh project"} (icon "refresh")))
-    (dom/div #js {:className "sidebar-project"}
-      (icon "folder")
-      (dom/div {} (dom/select #js {:className "sidebar-project-picker" :aria-label "Project" :value (get-in props [:ui/project :id])
-                                  :onChange #(load-project! (.. % -target -value))}
-                     (map #(dom/option #js {:key (:id %) :value (:id %)} (:name %)) (:ui/projects props)))
-        (dom/span {} "Analytics project"))
-      (dom/button #js {:className "icon-button" :aria-label "Choose project" :title "Choose project" :onClick choose-project!} (icon "folder")))
-    (dom/div #js {:className "search-field"} (icon "search")
-      (dom/input #js {:className "model-search" :aria-label "Search models" :placeholder "Search models..."
-                      :value (:ui/model-search props) :onChange #(value! :ui/model-search %) }))
-    (dom/details #js {:className "tree-folder model-list" :open true}
-      (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} "models"))
-      (cond
-        (empty? models) (dom/p #js {:className "sidebar-hint"} "Parse the project to discover models.")
-        (empty? filtered) (dom/p #js {:className "sidebar-hint"} "No matching models.")
-        :else (model-tree filtered (:ui/model-id props) "models")))
-    (when (str/blank? (:ui/model-search props))
-      (map (fn [folder]
-             (let [entries (filter #(str/starts-with? (:path %) (str folder "/")) files)]
-               (dom/details #js {:className "tree-folder" :key folder}
-                 (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} folder))
-                 (if (seq entries)
-                   (map (fn [file]
-                          (dom/button #js {:className "file-row" :key (:path file) :title (:path file) :onClick #(load-file! (:path file))}
-                            (icon "file") (dom/span {} (subs (:path file) (inc (count folder)))))) entries)
-                   (dom/p #js {:className "sidebar-hint"} "No files in this folder.")))))
-        ["macros" "seeds" "snapshots" "tests" "analyses"]))
-    (dom/details #js {:className "files-list"}
-      (dom/summary {} "Project files" (pill (count (:ui/files props))))
-      (map #(dom/button #js {:key (:path %) :className (str "file-row " (when (= (:path %) (get-in props [:ui/file :path])) "active"))
-                             :onClick (fn [_] (load-file! (:path %))) :title (:path %)}
-              (icon "file") (dom/span {} (:path %))) (:ui/files props)))
-    (dom/details #js {:className "tree-folder target-tree" :open true}
-      (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} "target"))
-      (map (fn [target]
-             (dom/button #js {:key target :className (str "target-row " (when (= target (:ui/target props)) "active"))
-                              :onClick #(patch! {:ui/target target})}
-               (icon "database") (dom/span {} target))) targets))
-    (dom/div #js {:className "sidebar-bottom"}
-      (dom/span #js {:className "project-path" :title (get-in props [:ui/project :path])} (get-in props [:ui/project :path]))))))
+  (let [collapsed? (:ui/sidebar-collapsed props)]
+    (dom/aside #js {:className (str "sidebar " (when collapsed? "collapsed")) :aria-label "Project navigation"}
+      (dom/div #js {:className "sidebar-heading"}
+        (dom/span #js {:className "navigation-label"} "Project")
+        (dom/button #js {:className "icon-button" :title (if collapsed? "Expand navigation" "Collapse navigation")
+                         :aria-label (if collapsed? "Expand navigation" "Collapse navigation") :aria-expanded (not collapsed?)
+                         :onClick #(save-layout! {:ui/sidebar-collapsed (not (:ui/sidebar-collapsed (current)))})} (icon "sidebar")))
+      (dom/div #js {:className "sidebar-project"}
+        (dom/div #js {:className "navigation-label"}
+          (dom/select #js {:className "sidebar-project-picker" :aria-label "Project" :value (get-in props [:ui/project :id])
+                          :onChange #(load-project! (.. % -target -value))}
+            (map #(dom/option #js {:key (:id %) :value (:id %)} (:name %)) (:ui/projects props)))
+          (dom/span {} "dbt project"))
+        (dom/button #js {:className "icon-button" :aria-label "Choose project" :title "Choose project" :onClick choose-project!} (icon "folder")))
+      (dom/nav #js {:className "project-navigation" :aria-label "Project tools"}
+        (map (fn [[key label name]]
+               (dom/button #js {:key key :title label :aria-label label :aria-pressed (= key (:ui/inspector props))
+                                :className (when (= key (:ui/inspector props)) "active")
+                                :onClick #(inspect-view! (when (not= key (:ui/inspector (current))) key))}
+                 (icon name) (dom/span #js {:className "navigation-label"} label)))
+          [["overview" "Overview" "command"] ["documentation" "Documentation" "file"]
+           ["routing" "Environment routing" "compare"] ["connections" "Connections" "database"] ["git" "Version control" "changes"]]))
+      (dom/div #js {:className "sidebar-bottom"}
+        (dom/button #js {:className "navigation-action" :title "Refresh project" :aria-label "Refresh project" :onClick refresh-project!}
+          (icon "refresh") (dom/span #js {:className "navigation-label"} "Refresh project"))
+        (dom/button #js {:className "navigation-action" :title "Restore default layout" :aria-label "Restore default layout"
+                         :onClick #(save-layout! (select-keys initial layout-keys))}
+          (icon "settings") (dom/span #js {:className "navigation-label"} "Reset layout"))
+        (dom/span #js {:className "project-path navigation-label" :title (get-in props [:ui/project :path])} (get-in props [:ui/project :path]))))))
 
 (defn dialect-control [props]
   (dom/select #js {:value (:ui/dialect props) :aria-label "Execution dialect" :onChange #(value! :ui/dialect %)}
     (dom/option #js {:value "duckdb"} "DuckDB · native")
-    (dom/option #js {:value "sqlite"} "SQLite · preview")))
-(defn model-editor [props]
-  (let [file (:ui/file props) dirty (not= (:ui/content props) (:ui/saved-content props))
-        model (first (filter #(= (:unique_id %) (:ui/model-id props)) (:ui/models props)))]
-    (dom/div #js {:className "editor-panel"}
-      (dom/div #js {:className "panel-title"}
-        (dom/div {} (dom/span #js {:className "eyebrow"} "MODEL WORKSPACE")
-          (dom/h2 {} (or (:name model) "Your next change starts here")))
-        (when model (pill (or (:materialized model) "model") "neutral")))
-      (if file
-        (dom/div #js {:className "code-card"}
-          (dom/div #js {:className "code-toolbar"}
-            (dom/div #js {:className "file-title"} (icon "file") (dom/span {} (:path file)) (when dirty (dom/span #js {:className "unsaved"} "Unsaved")))
-            (button "Save file" save-file! "small" (or (not dirty) (:ui/submitting props))))
-          (when (:ui/conflict props)
-            (dom/div #js {:className "conflict-banner"} "A newer version exists on disk. "
-              (button "Reload disk version" #(load-file! (:path file)) "small" false)))
-          (dom/textarea #js {:className "code-editor" :aria-label "Model file editor" :spellCheck false
-                             :value (:ui/content props) :onChange #(value! :ui/content %)
-                             :onKeyDown #(when (and (or (.-ctrlKey %) (.-metaKey %)) (= "s" (.-key %))) (.preventDefault %) (save-file!))})
-          (dom/div #js {:className "editor-footer"}
-            (dom/span {} (str (count (str/split-lines (:ui/content props))) " lines"))
-            (dom/span {} (str "Revision " (subs (or (:revision file) "") 0 (min 10 (count (or (:revision file) ""))))))
-            (dom/span {} "⌘ / Ctrl S to save")))
-        (dom/div #js {:className "empty-editor"} (icon "model")
-          (dom/h3 {} "Pick a model to explore")
-          (dom/p {} "Choose a model or project file in the explorer. Parse refreshes your project graph.")
-          (button "Parse project" #(submit! "parse" {}) "small" (:ui/submitting props))))
-      (when model
-        (dom/div #js {:className "preview-strip"}
-          (dom/div {} (dom/strong {} "Try this model") (dom/p {} "Preview the current model or its saved baseline version."))
-          (dom/div #js {:className "preview-controls"}
-            (checkbox "Saved baseline version" :ui/baseline-input (:ui/baseline-input props))
-            (dialect-control props)
-            (button "▷ Preview" run-preview! "primary" (or dirty (:ui/submitting props)))))
-        )
-      (when dirty (dom/p #js {:className "hint"} "Save your file before building or previewing the change."))
-      (when model
-        (dom/details #js {:className "lineage card"}
-          (dom/summary {} "Upstream dependencies" (pill (count (:depends_on model))))
-          (if (seq (:depends_on model))
-            (map #(dom/div #js {:className "dependency mono" :key %} (icon "model") (str %)) (:depends_on model))
-            (dom/p #js {:className "muted"} "No upstream dependencies reported."))))
-      (dom/details #js {:className "reference-import card"}
-        (dom/summary {} "Import an existing reference manifest")
-        (dom/p #js {:className "hint"} "Use existing production or target artifacts without rebuilding them. Give the reference target a label; your development target stays selected above.")
-        (dom/div #js {:className "import-controls"}
-          (field-label "Artifact directory containing manifest.json"
-            (dom/input #js {:value (:ui/artifact-dir props) :placeholder "/path/to/production-artifacts" :onChange #(value! :ui/artifact-dir %)}))
-          (field-label "Reference target"
-            (dom/input #js {:aria-label "Reference target" :value (:ui/reference-target props) :placeholder "prod" :onChange #(value! :ui/reference-target %)}))
-          (button "Import state" import-baseline! "small" (or (str/blank? (:ui/artifact-dir props)) (:ui/submitting props))))))))
-
-(declare results-panel)
-(defn query-status-bar [props]
-  (let [jobs (filter #(= "query" (:kind %)) (:ui/jobs props))
-        job (if (:ui/query-job props) (first (filter #(= (:ui/query-job props) (:job/id %)) jobs)) (first jobs))
+    (dom/option #js {:value "sqlite"} "SQLite · preview")
+    (dom/option #js {:value "snowflake"} "Snowflake · SELECT")
+    (dom/option #js {:value "federated"} "Federation · DuckDB")))
+(declare results-panel bottom-workspace)
+(defn global-status-bar [props]
+  (let [jobs (:ui/jobs props)
+        active-job (first (filter #(#{"queued" "running" "cancelling"} (:status %)) jobs))
+        job (or active-job (first (filter #(= (:ui/status-job props) (:job/id %)) jobs)) (first jobs))
         status (:status job) active? (#{"queued" "running" "cancelling"} status)
-        duration (when (:started_at job)
-                   (- (.getTime (js/Date. (or (:finished_at job) (.now js/Date)))) (.getTime (js/Date. (:started_at job)))))
-        summary (:summary job)
+        duration (when (:started_at job) (- (.getTime (js/Date. (or (:finished_at job) (.now js/Date)))) (.getTime (js/Date. (:started_at job)))))
+        kind (str/capitalize (or (:kind job) "job")) summary (:summary job)
         message (cond
-                  (:ui/converting props) "Parsing and converting…"
-                  (:ui/query-requesting props) "Submitting query…"
                   (:ui/error props) (:ui/error props)
-                  (or (= status "queued") (and (:ui/query-job props) (nil? job))) "Queued · waiting for the project"
-                  (= status "running") (str "Running" (when (:statement_index summary) (str " · statement " (:statement_index summary) " of " (:statement_count summary))))
-                  (= status "cancelling") "Cancelling…"
-                  (= status "succeeded") (str "Completed · " (reduce + 0 (map :row_count (:statement_results summary))) " rows · " (:statement_count summary 1) " statement(s)")
-                  (= status "failed") (str "Failed · " (:error job))
-                  (= status "cancelled") "Cancelled"
-                  (= status "interrupted") "Interrupted · load the query to rerun"
-                  :else "Ready · select text or place the cursor in a statement")]
-    (dom/div #js {:className (str "query-status-bar " status) :role "status" :aria-label "Query status" :aria-live "polite"}
+                  (:ui/converting props) "Parsing and converting…"
+                  (:ui/submitting props) "Submitting…"
+                  (:ui/notice props) (:ui/notice props)
+                  (= status "queued") (str kind " queued · waiting for the project")
+                  (= status "running") (str kind " running" (when (:statement_index summary) (str " · statement " (:statement_index summary) " of " (:statement_count summary))))
+                  (= status "cancelling") (str "Cancelling " (str/lower-case kind) "…")
+                  (= status "succeeded") (str kind " completed" (when (= "query" (:kind job)) (str " · " (reduce + 0 (map :row_count (:statement_results summary))) " rows · " (:statement_count summary 1) " statement(s)")))
+                  (= status "failed") (str kind " failed · " (:error job))
+                  (= status "cancelled") (str kind " cancelled")
+                  (= status "interrupted") (str kind " interrupted")
+                  :else "Ready · write a query or choose a project")]
+    (dom/footer #js {:className (str "global-status-bar query-status-bar " status) :role "status" :aria-label "Workbench status" :aria-live "polite"}
       (dom/div #js {:className "query-status-message"}
-        (dom/span #js {:className (str "status-dot " (if active? "running" status))})
-        (dom/span #js {:title message} message))
+        (dom/span #js {:className (str "status-dot " (if (:ui/error props) "failed" (if active? "running" status)))})
+        (dom/span #js {:title message :role (when (:ui/error props) "alert")} message))
       (dom/div #js {:className "query-status-controls"}
         (when duration (dom/span {} (str (.toFixed (/ duration 1000) 1) " s")))
         (dom/span {} (str (str/upper-case (:ui/query-format props)) " · " (:ui/target props)))
-        (when active? (button "Cancel query" #(cancel-job! (:job/id job)) "small danger" (= "cancelling" status)))))))
-
+        (when active? (button (if (= "query" (:kind job)) "Cancel query" "Cancel job") #(cancel-job! (:job/id job)) "small danger" (= "cancelling" status)))
+        (when (:ui/error props) (dom/button #js {:className "icon-button" :aria-label "Dismiss error" :onClick #(patch! {:ui/error nil})} (icon "close")))
+        (when (:ui/notice props) (dom/button #js {:className "icon-button" :aria-label "Dismiss notice" :onClick #(patch! {:ui/notice nil})} (icon "close")))))))
 (defn format-preferences [props]
   (let [options (:ui/format-options props)
         control (fn [title key choices]
@@ -591,9 +597,8 @@
                                                      :onChange #(let [value (.. % -target -value)]
                                                                   (save-format-options! (assoc (:ui/format-options (current)) key (cond (#{:tabWidth :expressionWidth :linesBetweenQueries} key) (js/Number value) (= key :useTabs) (= value "true") :else value))))}
                                        (map (fn [[value label]] (dom/option #js {:key (str value) :value (str value)} label)) choices))))]
-    (dom/details #js {:className "format-preferences"}
-      (dom/summary {} "Style")
-      (dom/div #js {:className "format-preferences-menu"}
+    (floating-menu "SQL formatting" "Style" "format-preferences-menu"
+      (dom/div {}
         (dom/h3 {} "SQL formatting")
         (control "Keyword case" :keywordCase [["upper" "UPPERCASE"] ["lower" "lowercase"] ["preserve" "Keep typed case"]])
         (control "Indent with" :useTabs [[false "Spaces"] [true "Tabs"]])
@@ -602,11 +607,11 @@
         (control "Expression width" :expressionWidth [[0 "Always break expressions"] [40 "40 characters"] [50 "50 characters"] [80 "80 characters"] [120 "120 characters"]])
         (control "Logical operator breaks" :logicalOperatorNewline [["before" "Before AND / OR"] ["after" "After AND / OR"]])
         (control "Blank lines between queries" :linesBetweenQueries [[1 "1"] [2 "2"] [3 "3"]])
-        (dom/p #js {:className "hint"} "Preferences are saved in this browser. Format applies them; generated SQL uses them automatically.")))))
+        (dom/p #js {:className "hint"} "Preferences are saved in this browser. Format applies them; generated SQL uses them automatically.")) "button small")))
 
 (defn query-editor [props]
   (let [mode (:ui/query-format props) visual? (= "visual" mode) edn? (not= "sql" mode)]
-    (dom/div #js {:className "query-workspace"}
+    (dom/div #js {:className "query-workspace" :style #js {"--query-split" (str (:ui/query-split props) "%")}}
       (dom/div #js {:className "code-card"}
         (dom/div #js {:className "code-toolbar query-toolbar"}
           (dom/div #js {:className "segmented"}
@@ -616,13 +621,26 @@
           (dom/div #js {:className "query-run-actions"}
             (when-not visual? (button "Format" format-query! "small" (:ui/converting props)))
             (format-preferences props)
-            (dom/details #js {:className "query-settings"}
-              (dom/summary #js {:aria-label "Query settings" :title "Query settings"} (icon "settings"))
-              (dom/div #js {:className "query-settings-menu"}
+            (react/createElement query-library/QueryLibrary
+              #js {:key (get-in props [:ui/project :id]) :projectId (get-in props [:ui/project :id])
+                   :query (clj->js {:content (if edn? (:ui/query-edn props) (:ui/query-sql props)) :format mode
+                                   :parameters (if edn? (:ui/parameters props) (:ui/sql-parameters props))
+                                   :target (:ui/target props) :dialect (:ui/dialect props)})
+                   :onNotice #(patch! {:ui/notice %})
+                   :onLoad (fn [query] (let [q (js->clj query :keywordize-keys true) content (:content q) visual? (= "visual" (:format q))]
+                                        (try (patch! {(if (= "sql" (:format q)) :ui/query-sql :ui/query-edn) content
+                                                       :ui/query-format (:format q) :ui/visual-query (when visual? (read-visual-query content))
+                                                       (if (= "sql" (:format q)) :ui/sql-parameters :ui/parameters) (:parameters q "{}")
+                                                       :ui/dialect (:dialect q "duckdb") :ui/query-selection {:from 0 :to 0 :head 0} :ui/error nil})
+                                             (catch :default error (report-error! error)))))})
+            (floating-menu "Query settings" (icon "settings") "query-settings-menu"
+              (dom/div {}
                 (field-label "Parameters"
                   (dom/input #js {:aria-label "Parameters" :className "mono" :value (if edn? (:ui/parameters props) (:ui/sql-parameters props))
                                   :onChange #(value! (if edn? :ui/parameters :ui/sql-parameters) %)}))
-                (field-label "Execution dialect" (dialect-control props))))
+                (field-label "Execution dialect" (dialect-control props))
+                (field-label "Maximum result rows" (dom/input #js {:type "number" :min 1 :max 100000 :value (:ui/max-rows props) :aria-label "Maximum result rows" :onChange #(patch! {:ui/max-rows (js/Number (.. % -target -value))})}))
+                (field-label "Timeout in seconds" (dom/input #js {:type "number" :min 1 :max 120 :value (:ui/timeout props) :aria-label "Timeout in seconds" :onChange #(patch! {:ui/timeout (js/Number (.. % -target -value))})}))))
             (button (if edn? "Run query" "Run statement") #(run-query! false) "primary" (:ui/submitting props))
             (when-not edn? (button "Run all" #(run-query! true) "small" (:ui/submitting props)))
             (dom/kbd {} "Shift+Enter / F5")))
@@ -631,34 +649,47 @@
             #(patch! {:ui/visual-query % :ui/query-edn (pretty-edn %) :ui/error nil :ui/conversion-note nil}))
           (react/createElement editor/QueryEditor
           #js {:key (:ui/editor-revision props) :value (if edn? (:ui/query-edn props) (:ui/query-sql props)) :format (:ui/query-format props)
+               :schema (clj->js (into {} (map (fn [relation] [(:name relation) (mapv :name (:columns relation))]) (:ui/catalog props))))
                :onChange #(patch! {(if edn? :ui/query-edn :ui/query-sql) % :ui/conversion-note nil})
                :onSelection #(patch! {:ui/query-selection (js->clj % :keywordize-keys true)})
                :selection (clj->js (:ui/query-selection props)) :onRun (fn [all? content selection] (run-query! all? content selection))}))
-        (query-status-bar props))
-      (dom/div #js {:className "query-results"} (results-panel props)))))
+        )
+      (pane-resizer props :ui/query-split "Resize query and results" "y" "--query-split" ".query-workspace")
+      (bottom-workspace props))))
 
 (defn result-option [r]
   (dom/option #js {:key (:id r) :value (:id r)}
     (str (str/capitalize (or (:kind r) "result")) " · " (:dialect r) " · " (:row_count r) " rows · "
          (date-label (:created_at r)) " · " (subs (:id r) 0 (min 6 (count (:id r)))))))
 (defn comparison [props]
-  (dom/section #js {:className "comparison card" :aria-label "Compare saved results"}
-    (dom/div #js {:className "comparison-heading"} (icon "compare") (dom/h3 {} "Compare results"))
-    (dom/p #js {:className "hint"} "Choose a baseline and candidate to find added, removed, or changed rows.")
-    (dom/div #js {:className "comparison-fields"}
-      (field-label "Baseline result" (dom/select #js {:aria-label "Baseline result" :value (:ui/left-result props) :onChange #(value! :ui/left-result %)}
-                                  (dom/option #js {:value ""} "Choose baseline…") (map result-option (remove #(= "compare" (:kind %)) (:ui/results props)))))
-      (field-label "Candidate result" (dom/select #js {:aria-label "Candidate result" :value (:ui/right-result props) :onChange #(value! :ui/right-result %)}
-                                   (dom/option #js {:value ""} "Choose candidate…") (map result-option (remove #(= "compare" (:kind %)) (:ui/results props)))))
-      (field-label "Match rows by key columns (optional)"
-        (dom/input #js {:aria-label "Key columns" :value (:ui/compare-keys props) :placeholder "customer_id, order_id" :onChange #(value! :ui/compare-keys %)}))
-      (button "Compare results" run-compare! "primary small"
-        (or (str/blank? (:ui/left-result props)) (str/blank? (:ui/right-result props))
-            (= (:ui/left-result props) (:ui/right-result props)) (:ui/submitting props))))
-    (dom/p #js {:className "hint"} "Without keys, compare complete rows. Comparisons use saved rows, without rerunning queries.")))
+  (let [result (:ui/result props) outcome (:ui/compare-result props) summary (:summary outcome) page (:ui/compare-page props) offset (:offset page 0) limit (:limit page 10)]
+    (dom/section #js {:className "comparison card" :aria-label "Compare saved results"}
+      (dom/div #js {:className "comparison-heading"} (icon "compare") (dom/h3 {} "Compare current result"))
+      (if result
+        (dom/div {}
+          (dom/p #js {:className "hint"} (str "Current: " (str/capitalize (:kind result)) " · " (:dialect result) " · " (:row_count result) " rows · " (date-label (:created_at result))))
+          (dom/div #js {:className "comparison-fields"}
+            (field-label "Compare to" (dom/select #js {:aria-label "Compare to" :value (:ui/right-result props) :onChange #(patch! {:ui/right-result (.. % -target -value) :ui/compare-result nil :ui/compare-page nil})}
+               (dom/option #js {:value ""} "Choose another saved result…")
+               (map result-option (remove #(or (= "compare" (:kind %)) (= (:id result) (:id %))) (:ui/results props)))))
+            (field-label "Match rows by keys (optional)" (dom/input #js {:aria-label "Key columns" :value (:ui/compare-keys props) :placeholder "customer_id" :onChange #(value! :ui/compare-keys %)})))
+          (button "Compare results" run-compare! "primary small" (or (str/blank? (:ui/right-result props)) (= (:id result) (:ui/right-result props)) (:ui/submitting props)))
+          (dom/p #js {:className "hint"} "Without keys, compare complete saved rows. Duplicate counts are preserved.")
+          (when outcome
+            (dom/div #js {:className "comparison-outcome" :role "status"}
+              (dom/strong {} (if (:equal summary) "Rows match" (str (:differences summary) " differences")))
+              (dom/p {} (str (:left_rows summary) " current rows · " (:right_rows summary) " compared rows"))
+              (when (false? (:schema_equal summary)) (dom/p #js {:className "schema-difference"} "Column types or names differ."))
+              (dom/p #js {:className "hint"} (:comparison_scope summary))
+              (react/createElement panels/ResultTable #js {:page (clj->js (:ui/compare-page props))})
+              (dom/div #js {:className "pagination"}
+                (dom/span {} (str (if (zero? (:row_count outcome)) 0 (inc offset)) "-" (min (:row_count outcome) (+ offset (count (:rows page)))) " of " (:row_count outcome) " differences"))
+                (button "Previous differences" #(load-result! (:id outcome) (max 0 (- offset limit))) "small" (zero? offset))
+                (button "Next differences" #(load-result! (:id outcome) (+ offset limit)) "small" (>= (+ offset limit) (:row_count outcome))))
+              (dom/a #js {:className "button small" :href (str "/api/results/" (:id outcome) "/download")} (icon "download") "Download differences"))))
+        (dom/p #js {:className "hint"} "Run a query or preview a model to select the current result.")))))
 (defn results-panel [props]
   (let [result (:ui/result props) page (:ui/page props) columns (:columns page)
-        comparison? (= "compare" (:kind result)) summary (:summary result)
         offset (or (:offset page) 0) limit (or (:limit page) 10) total (or (:row_count page) (:row_count result) 0)
         selected-job (first (filter #(= (:job/id %) (:ui/selected-job props)) (:ui/jobs props)))
         statements (get-in selected-job [:summary :statement_results])]
@@ -666,7 +697,6 @@
       (dom/div #js {:className "panel-title"}
         (dom/div {} (dom/span #js {:className "eyebrow"} "RESULT EXPLORER") (dom/h2 {} "Results"))
         (when result (pill (str (:row_count result) " rows") "accent")))
-      (when (= "results" (:ui/tab props)) (comparison props))
       (dom/div #js {:className "result-toolbar"}
         (dom/nav #js {:className "result-tabs" :aria-label "Statement results"}
           (if (seq statements)
@@ -677,21 +707,21 @@
                      (icon "model") (str "Result " (:statement_index item) " · " (:row_count item) " rows"))) statements)
             (dom/span #js {:className "result-tab active"} (icon "model") "Results")))
         (when result (dom/span #js {:className "result-count"} (str total " rows")))
-        (dom/details #js {:className "saved-results"}
-          (dom/summary #js {:title "Browse history" :aria-label "Browse history"} (icon "clock"))
-          (dom/div #js {:className "result-picker"}
+        (floating-menu "Browse history" (icon "clock") "result-picker"
+          (dom/div {}
             (field-label "Saved result"
               (dom/select #js {:aria-label "Saved result" :value (or (:id result) "") :onChange #(when-not (str/blank? (.. % -target -value)) (load-result! (.. % -target -value)))}
-                (dom/option #js {:value ""} "Choose a saved result...") (map result-option (:ui/results props))))))
+                (dom/option #js {:value ""} "Choose a saved result...") (map result-option (remove #(= "compare" (:kind %)) (:ui/results props)))))))
         (when result (dom/a #js {:className "icon-button" :aria-label "Download CSV" :title "Download CSV" :href (str "/api/results/" (:id result) "/download?format=csv")} (icon "download"))))
+      (dom/nav #js {:className "results-view-tabs" :aria-label "Results view"}
+        (map (fn [[key label]] (dom/button #js {:key key :aria-pressed (= key (:ui/results-view props)) :className (when (= key (:ui/results-view props)) "active") :onClick #(patch! {:ui/results-view key})} label))
+             [["data" "Data"] ["chart" "Chart"] ["compare" "Compare"] ["sql" "SQL & provenance"]]))
+      (case (:ui/results-view props)
+        "compare" (comparison props)
+        "chart" (react/createElement panels/ResultChart #js {:result (clj->js result)})
+        "sql" (dom/div #js {:className "result-sql card"} (dom/h4 {} "EXECUTED SQL") (dom/pre {} (json-display (:sql result))) (dom/h4 {} "INPUT PROVENANCE") (dom/pre {} (json-display (:provenance result))))
       (if result
-        (dom/div {}
-          (when comparison?
-            (dom/div #js {:className (str "comparison-outcome " (if (:equal summary) "matches" "differs")) :role "status"}
-              (dom/strong {} (if (:equal summary) "Rows match" (str (or (:differences summary) total) " differences")))
-              (dom/span {} (str (:left_rows summary) " left rows · " (:right_rows summary) " right rows"))
-              (when (false? (:schema_equal summary)) (dom/p #js {:className "schema-difference"} "Column types/names differ."))
-              (dom/p #js {:className "hint"} (or (:comparison_scope summary) "Comparison applies to these saved result rows."))))
+        (dom/div #js {:className "result-data"}
           (dom/div #js {:className "grid-wrap"}
             (dom/table #js {:className "result-grid"}
               (dom/thead {} (dom/tr {} (dom/th #js {:className "row-number"} "#")
@@ -703,19 +733,15 @@
                     (dom/tr #js {:key (+ offset i)} (dom/td #js {:className "row-number"} (+ offset i 1))
                       (map-indexed (fn [j value] (dom/td #js {:key j :title (when (some? value) (str value)) :className (when (nil? value) "null-value")}
                                                   (if (nil? value) "null" (if (or (map? value) (vector? value)) (json-display value) (str value))))) row))) (:rows page)))))
-          (when (empty? (:rows page)) (dom/p #js {:className "empty-rows"} (if comparison? "No row differences were found." "The query returned no rows.")))
+          (when (empty? (:rows page)) (dom/p #js {:className "empty-rows"} "The query returned no rows."))
           (dom/div #js {:className "pagination"}
             (dom/span {} (str (if (zero? total) 0 (inc offset)) "-" (min total (+ offset (count (:rows page)))) " of " total " rows"))
             (dom/div {} (button "Previous" #(load-result! (:id result) (max 0 (- offset limit))) "small" (zero? offset))
               (dom/span #js {:className "page-number"} (str (inc (quot offset limit))))
-              (button "Next" #(load-result! (:id result) (+ offset limit)) "small" (>= (+ offset limit) total))))
-          (dom/details #js {:className "result-sql card"}
-            (dom/summary {} "SQL & provenance")
-            (dom/h4 {} "EXECUTED SQL") (dom/pre {} (json-display (:sql result)))
-            (dom/h4 {} "INPUT PROVENANCE") (dom/pre {} (json-display (:provenance result)))))
+              (button "Next" #(load-result! (:id result) (+ offset limit)) "small" (>= (+ offset limit) total)))))
         (dom/div #js {:className "empty-editor"} (icon "play") (dom/h3 {} "An idea, then a result.")
           (dom/p {} "Preview a model or run a query. Its result will appear here with a record of SQL and input bindings.")))
-      )))
+      ))))
 
 (defn job-activity [props]
   (let [selected (first (filter #(= (:job/id %) (:ui/selected-job props)) (:ui/jobs props)))
@@ -741,6 +767,7 @@
             (dom/dt {} "Type") (dom/dd {} (str/capitalize (:kind selected))))
           (when (= "query" (:kind selected))
             (dom/div #js {:className "replay-actions"}
+              (when (:result_id selected) (button "View results" #(load-result! (:result_id selected)) "small"))
               (button "Load query" #(load-query! selected) "small")
               (button "Replay" #(load-query! selected true) "small" (:ui/submitting props))))
           (dom/details #js {:className "job-summary"}
@@ -770,23 +797,97 @@
                (button "Load after" #(load-file! (:path entry) {:content (:after entry)}) "small"))) (:ui/changes props))
       (dom/p #js {:className "sidebar-hint"} "Saved project edits appear here. Query runs stay in Activity."))))
 
-(defn activity [props]
-  (dom/aside #js {:className "history-panel"}
-    (dom/nav #js {:className "history-tabs" :aria-label "History"}
-      (dom/button #js {:className (str "button " (when (= "activity" (:ui/activity-tab props)) "selected")) :onClick #(patch! {:ui/activity-tab "activity"})} (icon "clock") "Activity")
-      (dom/button #js {:className (str "button " (when (= "changes" (:ui/activity-tab props)) "selected")) :onClick #(patch! {:ui/activity-tab "changes"})} (icon "changes") "Changes"))
-    (if (= "changes" (:ui/activity-tab props)) (changes-panel props) (job-activity props))))
+(defn project-inspector [props view]
+  (react/createElement panels/ProjectInspector
+    #js {:project (clj->js (:ui/project props)) :view view :modelId (:ui/model-id props) :jobs (clj->js (:ui/jobs props)) :target (:ui/target props)
+         :onOpenFile load-file! :onError report-error! :onNotice #(patch! {:ui/notice %}) :onInspect inspect-view!
+         :onRun #(submit! %1 (js->clj %2 :keywordize-keys true))
+         :onTarget (fn [id type] (patch! {:ui/target id :ui/dialect (if (= type "snowflake") "snowflake" "duckdb")}) (load-catalog!))
+         :onRefresh refresh-project!
+         :onQuery (fn [content dialect] (patch! {:ui/query-sql content :ui/query-format "sql" :ui/dialect dialect :ui/query-selection {:from 0 :to 0 :head 0}}))}))
+
+(defn bottom-workspace [props]
+  (let [view (:ui/bottom-tab props)]
+    (dom/section #js {:className "workspace-bottom" :aria-label "Query panels"}
+      (dom/nav #js {:className "bottom-tabs" :aria-label "Query panels"}
+        (map (fn [[key label name]]
+               (dom/button #js {:key key :className (when (= key view) "active") :aria-pressed (= key view)
+                                :onClick #(patch! (cond-> {:ui/bottom-tab key} (= key "results") (assoc :ui/results-view "data")))}
+                 (icon name) label))
+          [["results" "Results" "model"] ["lineage" "Lineage" "changes"] ["activity" "Activity" "clock"]
+           ["changes" "Changes" "file"] ["runs" "Runs & tests" "check"]]))
+      (dom/div #js {:className (str "bottom-content " (if (= view "results") "query-results" (str "bottom-" view)))}
+        (case view "results" (results-panel props) "activity" (job-activity props) "changes" (changes-panel props)
+              (project-inspector props view))))))
+
+(defn project-context-pane [props]
+  (dom/aside #js {:key "project-context" :className "inspector-panel project-context-pane" :aria-label "Project workspace"}
+    (dom/div #js {:className "inspector-heading"}
+      (dom/strong {} (get {"overview" "Overview" "documentation" "Documentation" "connections" "Connections"
+                           "routing" "Environment routing" "git" "Version control"} (:ui/inspector props)))
+      (dom/button #js {:className "icon-button" :aria-label "Close project view" :title "Close project view" :onClick #(inspect-view! nil)} (icon "close")))
+    (project-inspector props (:ui/inspector props))))
+
+(defn file-pane [props]
+  (let [models (:ui/models props) models? (= "models" (:ui/file-view props)) search (str/lower-case (:ui/files-search props))
+        entries (if models? models (:ui/files props))
+        filtered (filter #(str/includes? (str/lower-case (:path %)) search) entries)
+        dirty (not= (:ui/content props) (:ui/saved-content props))]
+    (dom/aside #js {:key "files-workspace" :className (str "files-pane " (when-not (:ui/explorer-visible props) "explorer-hidden"))
+                   :aria-label "Project files" :style #js {"--files-split" (str (:ui/files-split props) "%")}}
+      (dom/div #js {:className "inspector-heading"}
+        (dom/strong {} (icon "file") "Files")
+        (dom/button #js {:className "icon-button" :title (if (:ui/explorer-visible props) "Hide file explorer" "Show file explorer")
+                         :aria-label (if (:ui/explorer-visible props) "Hide file explorer" "Show file explorer") :aria-expanded (:ui/explorer-visible props)
+                         :onClick #(save-layout! {:ui/explorer-visible (not (:ui/explorer-visible (current)))})} (icon "folder")))
+      (when (:ui/explorer-visible props)
+        (dom/div #js {:key "file-explorer" :className "file-explorer" :aria-label "File explorer"}
+          (dom/nav #js {:className "file-view-tabs" :aria-label "File explorer views"}
+            (dom/button #js {:className (when models? "active") :aria-pressed models? :onClick #(save-layout! {:ui/file-view "models"})} "Models")
+            (dom/button #js {:className (when-not models? "active") :aria-pressed (not models?) :onClick #(save-layout! {:ui/file-view "all"})} "All files"))
+          (dom/div #js {:className "search-field"} (icon "search")
+            (dom/input #js {:aria-label (if models? "Search models" "Search project files") :placeholder "Filter files…"
+                            :value (:ui/files-search props) :onChange #(value! :ui/files-search %)}))
+          (dom/div #js {:className "file-tree"}
+            (cond
+              (empty? entries) (dom/p #js {:className "sidebar-hint"} (if models? "Parse the project to discover models." "No editable project files."))
+              (empty? filtered) (dom/p #js {:className "sidebar-hint"} (if models? "No matching models." "No matching files."))
+              :else (file-tree filtered models (get-in props [:ui/file :path]) "")))))
+      (when (:ui/explorer-visible props) (pane-resizer props :ui/files-split "Resize file explorer and editor" "y" "--files-split" ".files-pane"))
+      (dom/div #js {:key "file-editor" :className "file-workspace"}
+        (when (:ui/loading-file props) (dom/div #js {:className "file-loading" :aria-live "polite"} (str "Opening " (:ui/loading-file props) "…")))
+        (dom/nav #js {:className "file-tabs" :aria-label "Open files"}
+          (map (fn [file]
+                 (dom/div #js {:className (str "file-tab " (when (= (:path file) (get-in props [:ui/file :path])) "active")) :key (:path file)}
+                   (dom/button #js {:onClick #(activate-file! file) :title (:path file)} (icon "file") (last (str/split (:path file) #"/")) (when (not= (:draft file) (:content file)) " •"))
+                   (dom/button #js {:className "icon-button" :aria-label (str "Close " (:path file)) :onClick #(close-file! (:path file))} (icon "close")))) (:ui/open-files props)))
+        (when (:ui/file props)
+          (dom/div #js {:className "file-actions"}
+            (dom/span #js {:className "hint"} (get-in props [:ui/file :path]))
+            (when dirty (dom/span #js {:className "unsaved"} "Unsaved"))
+            (button "Save file" save-file! "small" (or (not dirty) (:ui/loading-file props) (:ui/submitting props)))
+            (button "Preview model" run-preview! "small" (or dirty (:ui/loading-file props) (nil? (:ui/model-id props)) (:ui/submitting props)))))
+        (if (seq (:ui/open-files props))
+          (dom/div #js {:className "file-editor-panes"}
+            (map (fn [file]
+                   (dom/div #js {:key (:path file) :className "file-editor-pane" :hidden (not= (:path file) (get-in props [:ui/file :path]))}
+                     (react/createElement editor/QueryEditor
+                       #js {:value (:draft file) :format (if (str/ends-with? (:path file) ".sql") "sql" "text") :label "Model file editor" :file true :readOnly (boolean (:ui/loading-file props))
+                            :selection #js {:from 0 :to 0 :head 0} :onSelection (fn [_] nil)
+                            :onChange #(update-file-content! (:path file) %) :onSave save-file! :onRun (fn [& _] (run-preview!))}))) (:ui/open-files props)))
+          (dom/div #js {:className "file-empty"} (icon "file") (dom/strong {} "Open a project file")
+            (dom/p #js {:className "hint"} "Browse the explorer or search with ⌘ K.")))))))
 
 (defsc Root [_ props]
-  {:query [:ui/theme :ui/projects :ui/project :ui/files :ui/results :ui/target :ui/defer :ui/favor-state
-           :ui/tab :ui/model-id :ui/file :ui/content :ui/saved-content :ui/selected-job
+  {:query [:ui/max-rows :ui/timeout :ui/query-split :ui/bottom-tab :ui/sidebar-collapsed :ui/sidebar-width :ui/context-width :ui/files-width :ui/files-split :ui/file-view :ui/files-search :ui/explorer-visible :ui/inspector :ui/open-files :ui/status-job :ui/results-view :ui/compare-result :ui/compare-page :ui/theme :ui/projects :ui/project :ui/files :ui/results :ui/target :ui/defer :ui/favor-state
+           :ui/tab :ui/model-id :ui/file :ui/loading-file :ui/content :ui/saved-content :ui/selected-job
            :ui/events :ui/event-cursor :ui/result :ui/page :ui/error :ui/notice :ui/submitting
            :ui/open-path :ui/profiles :ui/query-format :ui/query-edn :ui/query-sql :ui/parameters :ui/sql-parameters
-           :ui/catalog :ui/visual-query :ui/format-options :ui/editor-revision :ui/query-job :ui/query-requesting :ui/query-selection :ui/converting :ui/conversion-note :ui/model-search :ui/build-scope :ui/activity-tab :ui/changes :ui/job-filter
-           :ui/dialect :ui/baseline-input :ui/left-result :ui/right-result :ui/compare-keys :ui/conflict :ui/artifact-dir :ui/reference-target
+           :ui/catalog :ui/visual-query :ui/format-options :ui/editor-revision :ui/query-job :ui/query-requesting :ui/query-selection :ui/converting :ui/conversion-note :ui/build-scope :ui/changes :ui/job-filter
+           :ui/dialect :ui/baseline-input :ui/right-result :ui/compare-keys :ui/conflict :ui/artifact-dir :ui/reference-target
            {:ui/models (comp/get-query ModelRow)} {:ui/jobs (comp/get-query JobRow)}]
    :initial-state (fn [_] initial)}
-  (let [project (:ui/project props) selected (:ui/model-id props) tab (:ui/tab props)
+  (let [project (:ui/project props) selected (:ui/model-id props)
         dirty (not= (:ui/content props) (:ui/saved-content props))]
     (dom/div #js {:className "app-shell"}
       (dom/header #js {:className "app-header"}
@@ -796,16 +897,19 @@
           (dom/div #js {:className "project-switch"}
             (dom/span #js {:className "header-divider" :aria-hidden true})
             (dom/div #js {:className "target-control"} (icon "database")
-            (dom/select #js {:aria-label "Target" :value (:ui/target props) :onChange #(value! :ui/target %)}
+            (dom/select #js {:aria-label "Target" :value (:ui/target props) :onChange #(do (value! :ui/target %) (load-catalog!))}
               (map #(dom/option #js {:key % :value %} %) (or (seq (:targets project)) ["dev"]))))))
+        (when project
+          (react/createElement panels/ProjectBranch #js {:project (clj->js project) :notice (:ui/notice props) :onInspect inspect-view!}))
+        (when project
+          (react/createElement panels/CommandPalette #js {:project (clj->js project) :onOpenFile load-file! :onInspect inspect-view!}))
         (when project
           (dom/div #js {:className "run-toolbar"}
             (dom/div #js {:className "run-actions"}
               (button "Test" #(submit! "test" (build-options props)) "small" (or dirty (:ui/submitting props)))
               (button "Build" build-project! "primary small" (or dirty (:ui/submitting props)))
-              (dom/details #js {:className "build-options"}
-                (dom/summary {} "Build options")
-                (dom/div #js {:className "build-options-menu card"}
+              (floating-menu "Build options" "Build options" "build-options-menu"
+                (dom/div {}
                   (field-label "Build scope"
                     (dom/select #js {:aria-label "Build scope" :value (:ui/build-scope props) :onChange #(value! :ui/build-scope %)}
                       (dom/option #js {:value "project"} "Entire project")
@@ -816,36 +920,41 @@
                     (dom/div {}
                       (checkbox "Use baseline refs" :ui/defer (:ui/defer props))
                       (checkbox "Prefer baseline relations" :ui/favor-state (:ui/favor-state props))))
-                  (button "Refresh model graph" #(submit! "parse" {}) "small" (:ui/submitting props)))))))
+                  (button "Refresh model graph" #(submit! "parse" {}) "small" (:ui/submitting props))) "button small"))))
         (dom/div #js {:className "theme-control"} (icon "theme")
           (dom/select #js {:aria-label "Theme" :value (:ui/theme props) :onChange #(choose-theme! (.. % -target -value))}
             (dom/option #js {:value "system"} "System theme")
             (dom/option #js {:value "light"} "Light theme")
             (dom/option #js {:value "dark"} "Dark theme")))
         (dom/div #js {:className "header-right"} (dom/span #js {:className "local-light"}) "Local session"))
-      (when (:ui/error props)
-        (dom/div #js {:className "message error" :role "alert"} (dom/span {} (:ui/error props))
-          (dom/button #js {:className "icon-button" :aria-label "Dismiss error" :onClick #(patch! {:ui/error nil})} "×")))
-      (when (:ui/notice props)
-        (dom/div #js {:className "message notice" :role "status"} (dom/span {} (:ui/notice props))
-          (dom/button #js {:className "icon-button" :aria-label "Dismiss notice" :onClick #(patch! {:ui/notice nil})} "×")))
       (if-not project (welcome props)
         (dom/div #js {:className "project-shell"}
-          (dom/div #js {:className "workspace"}
+          (dom/div #js {:className (str "workspace " (when (:ui/inspector props) "with-project-context ") (when (:ui/sidebar-collapsed props) "navigation-collapsed"))
+                        :style #js {"--sidebar-width" (str (:ui/sidebar-width props) "px") "--context-width" (str (:ui/context-width props) "px") "--files-width" (str (:ui/files-width props) "px")}}
             (sidebar props)
-            (dom/main #js {:className "main-pane"}
+            (when-not (:ui/sidebar-collapsed props)
+              (pane-resizer props :ui/sidebar-width "Resize navigation" "x" "--sidebar-width" ".workspace" ".sidebar"))
+            (when (:ui/inspector props) (project-context-pane props))
+            (when (:ui/inspector props)
+              (pane-resizer props :ui/context-width "Resize project view" "x" "--context-width" ".workspace" ".project-context-pane"))
+            (dom/main #js {:key "query-workspace" :className "main-pane"}
               (dom/nav #js {:className "workspace-tabs" :aria-label "Workspace"}
-                (map (fn [[key label]] (dom/button #js {:key key :className (when (= key tab) "active") :onClick #(patch! {:ui/tab key})} label))
-                  [["model" "Model SQL"] ["query" "Query lab"] ["results" "Results"]])
-                (dom/span #js {:className "baseline-status"} (dom/span #js {:className (str "status-dot " (if (:baseline project) "succeeded" "queued"))})
-                  (if (:baseline project) "Baseline ready" "No baseline yet")))
-              (case tab "query" (query-editor props) "results" (results-panel props) (model-editor props)))
-            (activity props)))))))
+                (dom/button #js {:className "active" :onClick #(patch! {:ui/tab "query"})} (icon "command") "Query lab")
+                (dom/button #js {:title "Focus the file viewer" :onClick #(if-let [element (.querySelector js/document ".file-editor-pane:not([hidden]) .cm-content")]
+                                                                          (.focus element)
+                                                                          (when-let [model (first (sort-by :path (vals (:model/id (current)))))] (select-model! model)))} (icon "file") "Model SQL"))
+              (query-editor props))
+            (pane-resizer props :ui/files-width "Resize files" "x" "--files-width" ".workspace" ".files-pane" -1)
+            (file-pane props))))
+
+      (global-status-bar props))))
+
 
 (defonce application (app/fulcro-app {}))
 (defn ^:export refresh [] (app/mount! application Root "app"))
 (defn ^:export init []
   (refresh)
+  (load-layout!)
   (try (when-let [saved (js/localStorage.getItem "workbench.sql-format-options")] (patch! {:ui/format-options (merge (:ui/format-options initial) (js->clj (js/JSON.parse saved) :keywordize-keys true))})) (catch :default _ nil))
   (format-query!)
   (let [saved-theme (read-preference "workbench.theme")
