@@ -79,8 +79,11 @@ export function executionInput(text, selection, format, all = false) {
 }
 
 const queryHighlightStyle = HighlightStyle.define(defaultHighlightStyle["specs"].map(function styleToken(spec) {
-  if (spec["color"] === "#708") return {...spec, "color": "#075dcd", "fontWeight": "600"};
-  if (spec["color"] === "#940") return {...spec, "color": "#798679"};
+  if (spec["color"] === "#708") return {...spec, "color": "var(--syntax-keyword)", "fontWeight": "600"};
+  if (spec["color"] === "#940") return {...spec, "color": "var(--muted)"};
+  if (["#164", "#a11", "#085"].includes(spec["color"])) return {...spec, "color": "var(--syntax-string)"};
+  if (spec["color"] === "#219") return {...spec, "color": "var(--syntax-number)"};
+  if (["#30a", "#256", "#00f", "#a50"].includes(spec["color"])) return {...spec, "color": "var(--syntax-function)"};
   return spec;
 }));
 
@@ -121,7 +124,7 @@ export function QueryEditor(props) {
       parent: host.current,
       state: EditorState.create({doc: props["value"], selection: {anchor: props["selection"]?.["from"] || 0, head: props["selection"]?.["head"] || 0}, extensions: [
         EditorView.lineWrapping, lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), drawSelection(),
-        history(), bracketMatching(), closeBrackets(), autocompletion(), indentOnInput(), syntaxHighlighting(queryHighlightStyle),
+        history(), bracketMatching(), closeBrackets(), autocompletion({icons: false}), indentOnInput(), syntaxHighlighting(queryHighlightStyle),
         ViewPlugin.define(function decorateStatement(editor) {
           return {decorations: highlightStatement(editor), update: function updateHighlight(update) {
             this.decorations = highlightStatement(update["view"]);

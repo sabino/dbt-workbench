@@ -44,7 +44,7 @@ try {
     evidence.jobs.push(record);
     expect(record.status, JSON.stringify(record)).toBe(success ? "succeeded" : "failed");
     await expect(page.locator(".job-row.active")).toContainText(record.status, {timeout: 10000});
-    if (record.result_id) await expect(page.getByLabel("Saved result")).toHaveValue(record.result_id, {timeout: 10000});
+    if (record.result_id) await expect(page.getByLabel("Saved result", {exact: true})).toHaveValue(record.result_id, {timeout: 10000});
     return record;
   }
 
@@ -53,6 +53,13 @@ try {
   await job(() => page.getByRole("button", {name: "Test", exact: true}).click());
   await page.getByRole("button", {name: "Query lab", exact: true}).click();
   const editor = page.getByRole("textbox", {name: "Query editor", exact: true});
+  async function setQuerySetting(label, value, select = false) {
+    const menu = page.locator(".query-settings");
+    await menu.locator("summary").click();
+    if (select) await page.getByLabel(label, {exact: true}).selectOption(value);
+    else await page.getByLabel(label, {exact: true}).fill(value);
+    await menu.locator("summary").click();
+  }
   const sql = "SELECT customer_id, SUM(amount) AS revenue\nFROM orders\nGROUP BY customer_id\nORDER BY customer_id;\n\nSELECT COUNT(*) AS count FROM customers;";
   await editor.fill(sql);
   await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
@@ -88,8 +95,57 @@ try {
   await expect(editor).toBeFocused();
   expect(all.summary.statement_results).toHaveLength(2);
   await page.getByRole("button", {name: "Result 1 ·", exact: false}).click();
-  await expect(page.getByLabel("Saved result")).toHaveValue(all.summary.statement_results[0].result_id);
+  await expect(page.getByLabel("Saved result", {exact: true})).toHaveValue(all.summary.statement_results[0].result_id);
+  await expect(page.locator(".result-grid tbody tr")).toHaveCount(10);
+  await page.getByRole("button", {name: "Next", exact: true}).click();
+  await expect(page.locator(".result-grid tbody .row-number").first()).toHaveText("11");
+  await page.getByRole("button", {name: "Previous", exact: true}).click();
+  await expect(page.locator(".result-grid tbody .row-number").first()).toHaveText("1");
+  await page.getByLabel("Search models").fill("missing-model");
+  await expect(page.getByText("No matching models.", {exact: true})).toBeVisible();
+  await page.getByLabel("Search models").fill("");
+  await page.getByLabel("Filter activity").selectOption("test");
+  await expect(page.locator(".job-row")).toHaveCount(1);
+  await page.getByLabel("Filter activity").selectOption("all");
+  await editor.fill(sql);
+  await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
+  const desktopLayout = await page.evaluate(() => {
+    const bounds = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+    return {width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+      editor: bounds(".query-code-editor"), pagination: bounds(".pagination"),
+      toolbar: bounds(".query-toolbar"), main: bounds(".main-pane")};
+  });
+  expect(desktopLayout.scrollWidth).toBe(desktopLayout.width);
+  expect(desktopLayout.pagination.bottom).toBeLessThanOrEqual(1024);
+  expect(desktopLayout.toolbar.right).toBeLessThanOrEqual(desktopLayout.main.right);
+  expect(desktopLayout.editor.height).toBeGreaterThan(220);
   await page.screenshot({path: join(output, "query-lab.png"), fullPage: true});
+  await page.emulateMedia({colorScheme: "dark", reducedMotion: "reduce"});
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByLabel("Theme", {exact: true}).selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.getByLabel("Theme", {exact: true}).selectOption("dark");
+  await editor.fill("SELECT cus");
+  await editor.press("Control+End");
+  await editor.press("Control+Space");
+  const completion = page.locator(".cm-tooltip-autocomplete");
+  await expect(completion).toBeVisible();
+  const popupStyle = await completion.evaluate(el => ({background: getComputedStyle(el).backgroundColor, color: getComputedStyle(el).color}));
+  expect(popupStyle.background).toBe("rgb(16, 29, 35)");
+  expect(popupStyle.color).toBe("rgb(227, 237, 242)");
+  await page.screenshot({path: join(output, "autocomplete-dark.png"), fullPage: true});
+  await editor.press("Escape");
+  await editor.fill(sql);
+  await page.screenshot({path: join(output, "query-dark.png"), fullPage: true});
+  await page.getByLabel("Theme", {exact: true}).selectOption("system");
+  await page.emulateMedia({colorScheme: "light", reducedMotion: "reduce"});
+  for (const width of [1280, 1024, 768, 390]) {
+    await page.setViewportSize({width, height: 900});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    await expect(page.getByRole("button", {name: "Run statement", exact: true})).toBeVisible();
+    await page.screenshot({path: join(output, `query-${width}.png`), fullPage: true});
+  }
+  await page.setViewportSize({width: 1536, height: 1024});
 
   await page.getByRole("button", {name: "EDN", exact: true}).click();
   await expect(editor).toContainText(":select");
@@ -142,14 +198,14 @@ try {
   await expect(editor).toHaveAttribute("data-language", "sql");
   await expect(editor).toContainText("LIMIT");
   await editor.fill("SELECT customer_id FROM orders WHERE status=:status ORDER BY customer_id LIMIT 3");
-  await page.getByLabel("Parameters", {exact: true}).fill('{"status":"completed"}');
+  await setQuerySetting("Parameters", '{"status":"completed"}');
   await page.getByRole("button", {name: "EDN", exact: true}).click();
   await expect(editor).toContainText(":param");
   await page.getByRole("button", {name: "SQL", exact: true}).click();
   await expect(editor).toHaveAttribute("data-language", "sql");
   await expect(editor).toContainText(":p0");
   await job(() => page.getByRole("button", {name: "Run all", exact: true}).click());
-  await page.getByLabel("Parameters", {exact: true}).fill("{}");
+  await setQuerySetting("Parameters", "{}");
   await editor.fill("SELECT FROM");
   await page.getByRole("button", {name: "EDN", exact: true}).click();
   await expect(page.getByRole("alert")).toBeVisible();
@@ -157,15 +213,21 @@ try {
   await page.getByRole("button", {name: "Dismiss error"}).click();
   await editor.fill("SELECT customer_id, SUM(amount) AS revenue FROM orders GROUP BY customer_id ORDER BY customer_id");
   await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
-  await page.getByLabel("Execution dialect").selectOption("sqlite");
+  await setQuerySetting("Execution dialect", "sqlite", true);
   const sqlite = await job(() => editor.press("F5"));
-  const comparison = await (await page.request.post(`${base}/api/projects/demo-jaffle-shop/jobs`, {data: {kind: "compare", options: {left_result_id: native.result_id, right_result_id: sqlite.result_id}}})).json();
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const record = await (await page.request.get(`${base}/api/jobs/${comparison.id}`)).json();
-    if (record.status === "succeeded") { expect(record.summary.equal).toBe(true); break; }
-    if (record.status === "failed") throw new Error(JSON.stringify(record));
-    await page.waitForTimeout(100);
-  }
+  await expect(page.getByRole("region", {name: "Compare saved results"})).toHaveCount(0);
+  await page.getByRole("button", {name: "Results", exact: true}).click();
+  await page.getByLabel("Baseline result", {exact: true}).selectOption(native.result_id);
+  await page.getByLabel("Candidate result", {exact: true}).selectOption(native.result_id);
+  await expect(page.getByRole("button", {name: "Compare results", exact: true})).toBeDisabled();
+  await page.getByLabel("Candidate result", {exact: true}).selectOption(sqlite.result_id);
+  const comparison = await job(() => page.getByRole("button", {name: "Compare results", exact: true}).click());
+  expect(comparison.summary.equal).toBe(true);
+  await expect(page.locator(".comparison-outcome")).toContainText("Rows match");
+  await page.screenshot({path: join(output, "results-compare.png"), fullPage: true});
+  await page.getByRole("button", {name: "Query lab", exact: true}).click();
+  await expect(page.getByRole("region", {name: "Compare saved results"})).toHaveCount(0);
+  await page.locator(".job-row").filter({hasText: "Query"}).nth(0).click();
 
   await page.getByRole("button", {name: "Load query", exact: true}).click();
   await expect(editor).toContainText(sqlite.options.editor_content);
@@ -191,7 +253,7 @@ try {
 
   await page.getByRole("button", {name: "Activity", exact: true}).click();
   await page.getByRole("button", {name: "Query lab", exact: true}).click();
-  await page.getByLabel("Execution dialect").selectOption("duckdb");
+  await setQuerySetting("Execution dialect", "duckdb", true);
   await editor.fill("SELECT 1 AS value; SELECT missing FROM orders; SELECT 3 AS value;");
   const failed = await job(() => page.getByRole("button", {name: "Run all", exact: true}).click(), false);
   expect(failed.summary.statement_results).toHaveLength(1);
@@ -207,11 +269,18 @@ try {
   await job(() => editor.press("Shift+Enter"));
   await expect(page.locator(".result-grid tbody td").last()).toHaveText("42");
   await expect(editor).toBeFocused();
+  await page.getByLabel("Theme", {exact: true}).selectOption("dark");
   await page.reload();
-  await page.getByRole("button", {name: "Create Jaffle demo", exact: false}).click();
+  await expect(page.getByLabel("Theme", {exact: true})).toHaveValue("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByLabel("Project", {exact: true})).toHaveValue("demo-jaffle-shop");
   await expect(page.locator(".job-row")).not.toHaveCount(0);
   await page.getByRole("button", {name: "Changes", exact: true}).click();
   await expect(page.locator(".change-entry")).toHaveCount(2);
+  await page.getByRole("button", {name: "Choose project", exact: true}).click();
+  await expect(page.getByRole("button", {name: "Create Jaffle demo", exact: false})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", {name: "Create Jaffle demo", exact: false})).toBeVisible();
   expect(evidence.browser_errors).toEqual([]);
   await writeFile(join(output, "evidence.json"), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({jobs: evidence.jobs.length, browser_errors: evidence.browser_errors, output}));

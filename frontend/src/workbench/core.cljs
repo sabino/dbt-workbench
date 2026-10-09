@@ -4,6 +4,30 @@
             [cljs.pprint :as pprint]
             [workbench.builder :as builder]
             ["react" :as react]
+            ["@phosphor-icons/react/dist/csr/Play" :as play-icon]
+            ["@phosphor-icons/react/dist/csr/FileText" :as file-icon]
+            ["@phosphor-icons/react/dist/csr/Table" :as table-icon]
+            ["@phosphor-icons/react/dist/csr/Check" :as check-icon]
+            ["@phosphor-icons/react/dist/csr/ArrowUpRight" :as arrow-icon]
+            ["@phosphor-icons/react/dist/csr/FolderSimple" :as folder-icon]
+            ["@phosphor-icons/react/dist/csr/Clock" :as clock-icon]
+            ["@phosphor-icons/react/dist/csr/X" :as close-icon]
+            ["@phosphor-icons/react/dist/csr/Plus" :as plus-icon]
+            ["@phosphor-icons/react/dist/csr/Command" :as command-icon]
+            ["@phosphor-icons/react/dist/csr/ArrowsLeftRight" :as compare-icon]
+            ["@phosphor-icons/react/dist/csr/Database" :as database-icon]
+            ["@phosphor-icons/react/dist/csr/MagnifyingGlass" :as search-icon]
+            ["@phosphor-icons/react/dist/csr/ArrowClockwise" :as refresh-icon]
+            ["@phosphor-icons/react/dist/csr/Hammer" :as build-icon]
+            ["@phosphor-icons/react/dist/csr/FastForward" :as run-all-icon]
+            ["@phosphor-icons/react/dist/csr/DownloadSimple" :as download-icon]
+            ["@phosphor-icons/react/dist/csr/GitBranch" :as changes-icon]
+            ["@phosphor-icons/react/dist/csr/CaretRight" :as chevron-icon]
+            ["@phosphor-icons/react/dist/csr/DotsThree" :as dots-icon]
+            ["@phosphor-icons/react/dist/csr/SlidersHorizontal" :as settings-icon]
+            ["@phosphor-icons/react/dist/csr/ArrowsOutSimple" :as expand-icon]
+            ["@phosphor-icons/react/dist/csr/Circle" :as circle-icon]
+            ["@phosphor-icons/react/dist/csr/Sun" :as sun-icon]
             ["./editor.js" :as editor]
             [com.fulcrologic.fulcro.application :as app]
             [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
@@ -16,7 +40,7 @@
 (def default-edn "{:select [:customer_id [[:sum :amount] :revenue]]\n :from [:orders]\n :group-by [:customer_id]\n :order-by [[:customer_id :asc]]}")
 (def default-sql "SELECT customer_id, SUM(amount) AS revenue\nFROM orders\nGROUP BY customer_id\nORDER BY customer_id")
 (def initial
-  {:ui/projects [] :ui/project nil :ui/models [] :ui/jobs [] :ui/files []
+  {:ui/theme "system" :ui/projects [] :ui/project nil :ui/models [] :ui/jobs [] :ui/files []
    :ui/results [] :ui/target "dev" :ui/defer true :ui/favor-state false
    :ui/tab "model" :ui/model-id nil :ui/file nil :ui/content "" :ui/saved-content ""
    :ui/selected-job nil :ui/events [] :ui/event-cursor 0 :ui/result nil :ui/page nil
@@ -25,7 +49,7 @@
    :ui/query-format "sql" :ui/query-edn default-edn :ui/query-sql default-sql
    :ui/parameters "{\"status\": \"completed\"}" :ui/sql-parameters "{}" :ui/dialect "duckdb" :ui/baseline-input false
    :ui/editor-revision 0 :ui/query-job nil :ui/query-requesting false :ui/query-selection {:from 0 :to 0 :head 0} :ui/converting false :ui/conversion-note nil
-   :ui/model-search "" :ui/build-scope "project" :ui/activity-tab "activity" :ui/changes []
+   :ui/model-search "" :ui/build-scope "project" :ui/activity-tab "activity" :ui/changes [] :ui/job-filter "all"
    :ui/left-result "" :ui/right-result "" :ui/compare-keys "" :ui/conflict false :ui/artifact-dir "" :ui/reference-target "prod"})
 
 (defmutation change [{:keys [updates]}]
@@ -71,6 +95,23 @@
 
 (defn entities! [table root id-key records]
   (comp/transact! application [(replace-entities {:table table :root root :id-key id-key :records records})]))
+(defn read-preference [key]
+  (try (js/localStorage.getItem key) (catch :default _ nil)))
+(defn save-preference! [key value]
+  (try (if value (js/localStorage.setItem key value) (js/localStorage.removeItem key))
+       (catch :default _ nil)))
+(defn apply-theme! [preference]
+  (let [dark? (or (= preference "dark")
+                  (and (= preference "system") (.-matches (js/window.matchMedia "(prefers-color-scheme: dark)"))))]
+    (.setAttribute js/document.documentElement "data-theme" (if dark? "dark" "light"))))
+(defn choose-theme! [preference]
+  (save-preference! "workbench.theme" preference)
+  (apply-theme! preference)
+  (patch! {:ui/theme preference}))
+(defn choose-project! []
+  (when (may-discard?)
+    (save-preference! "workbench.project" nil)
+    (patch! {:ui/project nil :ui/error nil :ui/notice nil :ui/content "" :ui/saved-content ""})))
 (defn load-projects! []
   (-> (request! "GET" "/api/projects")
     (.then #(patch! {:ui/projects (:projects %)})) (.catch report-error!)))
@@ -104,7 +145,8 @@
     (.then (fn [project]
              (let [targets (:targets project)
                    target (if (some #{"dev"} targets) "dev" (or (first targets) "dev"))]
-               (patch! {:ui/project project :ui/target target :ui/tab "model"})
+               (save-preference! "workbench.project" id)
+               (patch! {:ui/project project :ui/target target :ui/tab "model" :ui/left-result "" :ui/right-result ""})
                (load-projects!) (load-models! id) (load-files! id) (load-results! id) (load-changes! id) (load-catalog!))))
     (.catch report-error!))))
 (defn create-demo! []
@@ -166,7 +208,7 @@
 (defn load-result! [id & [offset keep-editor?]]
   (let [offset (or offset 0)]
     (-> (js/Promise.all #js [(request! "GET" (str "/api/results/" id))
-                             (request! "GET" (str "/api/results/" id "/rows?offset=" offset "&limit=100"))])
+                             (request! "GET" (str "/api/results/" id "/rows?offset=" offset "&limit=10"))])
       (.then (fn [data]
                (patch! {:ui/result (aget data 0) :ui/page (aget data 1) :ui/tab (if (or keep-editor? (= "query" (:ui/tab (current)))) (:ui/tab (current)) "results") :ui/error nil})))
       (.catch report-error!))))
@@ -320,10 +362,20 @@
 
 (defn icon [name]
   (dom/span #js {:className (str "icon icon-" name) :aria-hidden true}
-    (case name "play" "▷" "file" "≡" "model" "◇" "check" "✓" "arrow" "↗" "folder" "▱" "clock" "◷" "close" "×" "plus" "+" "command" "⌘" "compare" "⇄" "dot" "●" "·")))
+    (react/createElement
+      (case name "theme" sun-icon/Sun "play" play-icon/Play "file" file-icon/FileText "model" table-icon/Table
+        "check" check-icon/Check "arrow" arrow-icon/ArrowUpRight "folder" folder-icon/FolderSimple
+        "clock" clock-icon/Clock "close" close-icon/X "plus" plus-icon/Plus "command" command-icon/Command
+        "compare" compare-icon/ArrowsLeftRight "database" database-icon/Database "search" search-icon/MagnifyingGlass
+        "refresh" refresh-icon/ArrowClockwise "build" build-icon/Hammer "run-all" run-all-icon/FastForward
+        "download" download-icon/DownloadSimple "changes" changes-icon/GitBranch "chevron" chevron-icon/CaretRight
+        "dots" dots-icon/DotsThree "settings" settings-icon/SlidersHorizontal "expand" expand-icon/ArrowsOutSimple circle-icon/Circle)
+      #js {:size 19 :weight "regular"})))
 (defn button [label action & [class disabled]]
   (dom/button #js {:className (str "button " class) :onClick (fn [_] (action))
-                   :onMouseDown (fn [event] (when (#{"Run statement" "Run all" "Run query"} label) (.preventDefault event))) :disabled (boolean disabled)} label))
+                   :onMouseDown (fn [event] (when (#{"Run statement" "Run all" "Run query"} label) (.preventDefault event))) :disabled (boolean disabled)}
+    (when-let [name (case label "Test" "play" "Build" "build" "Run statement" "play" "Run query" "play" "Run all" "run-all" "Replay" "clock" nil)] (icon name))
+    label))
 (defn pill [label & [class]] (dom/span #js {:className (str "pill " class)} label))
 (defn field-label [label child] (dom/label #js {:className "field"} (dom/span #js {:className "field-label"} label) child))
 (defn checkbox [label key checked]
@@ -349,11 +401,15 @@
   (dom/button #js {:className (str "job-row " (when (:active (comp/get-computed this)) "active"))
                    :onClick #(do (select-job! id) (when result_id (load-result! result_id 0 (= "query" (:ui/tab (current))))))}
     (dom/span #js {:className (str "status-dot " status)})
-    (dom/span #js {:className "job-copy"} (dom/strong {} (str/capitalize (or kind "job")))
-      (dom/span {} (str status " · " (date-label created_at)
-                       (when (and started_at finished_at) (str " · " (.round js/Math (- (.getTime (js/Date. finished_at)) (.getTime (js/Date. started_at)))) " ms"))))
+    (dom/span #js {:className "job-copy"}
+      (dom/span #js {:className "job-time"} (date-label created_at)
+        (dom/span #js {:className "job-duration"}
+          (if (and started_at finished_at)
+            (str (.round js/Math (- (.getTime (js/Date. finished_at)) (.getTime (js/Date. started_at)))) " ms")
+            (str/capitalize (or status "queued")))))
+      (dom/span #js {:className "job-status"} (str/capitalize (or kind "job")) (dom/span {} status))
       (when (= "query" kind) (dom/code #js {:className "query-snippet"} (subs (or (:content options) "") 0 (min 90 (count (or (:content options) "")))))))
-    (when result_id (icon "arrow"))))
+    (icon "chevron")))
 (def job-row (comp/factory JobRow {:keyfn :job/id}))
 
 (defn welcome [props]
@@ -379,28 +435,69 @@
           (map #(dom/button #js {:key (:id %) :onClick (fn [_] (load-project! (:id %)))}
                   (icon "folder") (dom/span {} (:name %)) (icon "arrow")) (:ui/projects props)))))))
 
+(defn model-tree [models selected prefix]
+  (let [direct (filter #(= prefix (str/join "/" (butlast (str/split (:path %) #"/")))) models)
+        folders (->> models
+                  (map :path)
+                  (filter #(str/starts-with? % (str prefix "/")))
+                  (map #(first (str/split (subs % (inc (count prefix))) #"/")))
+                  (filter #(some (fn [model] (str/starts-with? (:path model) (str prefix "/" % "/"))) models))
+                  distinct sort)]
+    (dom/div #js {:className "tree-children"}
+      (map #(model-row (comp/computed % {:active (= (:unique_id %) selected)})) direct)
+      (map (fn [folder]
+             (dom/details #js {:className "tree-folder" :key (str prefix "/" folder) :open true}
+               (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} folder))
+               (model-tree models selected (str prefix "/" folder)))) folders))))
+
 (defn sidebar [props]
+  (let [models (:ui/models props)
+        filtered (filter #(str/includes? (str/lower-case (:name %)) (str/lower-case (:ui/model-search props))) models)
+        files (:ui/files props)
+        targets (or (seq (get-in props [:ui/project :targets])) ["dev"])]
   (dom/aside #js {:className "sidebar"}
-    (dom/div #js {:className "sidebar-heading"} (dom/span {} "PROJECT EXPLORER")
-      (dom/button #js {:className "icon-button" :title "Refresh project" :onClick refresh-project! :aria-label "Refresh project"} "↻"))
+    (dom/div #js {:className "sidebar-heading"} (dom/span {} "Project")
+      (dom/button #js {:className "icon-button" :title "Refresh project" :onClick refresh-project! :aria-label "Refresh project"} (icon "refresh")))
     (dom/div #js {:className "sidebar-project"}
-      (dom/strong {} (get-in props [:ui/project :name]))
-      (dom/span {} "Local analytics project"))
-    (dom/input #js {:className "model-search" :aria-label "Search models" :placeholder "Search models…"
-                    :value (:ui/model-search props) :onChange #(value! :ui/model-search %)})
-    (dom/div #js {:className "sidebar-section-title"} "Models" (pill (count (:ui/models props))))
-    (dom/div #js {:className "model-list"}
-      (if (seq (:ui/models props)) (map #(model-row (comp/computed % {:active (= (:unique_id %) (:ui/model-id props))}))
-              (filter #(str/includes? (str/lower-case (:name %)) (str/lower-case (:ui/model-search props))) (:ui/models props)))
-        (dom/p #js {:className "sidebar-hint"} "Parse the project to discover models.")))
+      (icon "folder")
+      (dom/div {} (dom/select #js {:className "sidebar-project-picker" :aria-label "Project" :value (get-in props [:ui/project :id])
+                                  :onChange #(load-project! (.. % -target -value))}
+                     (map #(dom/option #js {:key (:id %) :value (:id %)} (:name %)) (:ui/projects props)))
+        (dom/span {} "Analytics project"))
+      (dom/button #js {:className "icon-button" :aria-label "Choose project" :title "Choose project" :onClick choose-project!} (icon "folder")))
+    (dom/div #js {:className "search-field"} (icon "search")
+      (dom/input #js {:className "model-search" :aria-label "Search models" :placeholder "Search models..."
+                      :value (:ui/model-search props) :onChange #(value! :ui/model-search %) }))
+    (dom/details #js {:className "tree-folder model-list" :open true}
+      (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} "models"))
+      (cond
+        (empty? models) (dom/p #js {:className "sidebar-hint"} "Parse the project to discover models.")
+        (empty? filtered) (dom/p #js {:className "sidebar-hint"} "No matching models.")
+        :else (model-tree filtered (:ui/model-id props) "models")))
+    (when (str/blank? (:ui/model-search props))
+      (map (fn [folder]
+             (let [entries (filter #(str/starts-with? (:path %) (str folder "/")) files)]
+               (dom/details #js {:className "tree-folder" :key folder}
+                 (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} folder))
+                 (if (seq entries)
+                   (map (fn [file]
+                          (dom/button #js {:className "file-row" :key (:path file) :title (:path file) :onClick #(load-file! (:path file))}
+                            (icon "file") (dom/span {} (subs (:path file) (inc (count folder)))))) entries)
+                   (dom/p #js {:className "sidebar-hint"} "No files in this folder.")))))
+        ["macros" "seeds" "snapshots" "tests" "analyses"]))
     (dom/details #js {:className "files-list"}
       (dom/summary {} "Project files" (pill (count (:ui/files props))))
       (map #(dom/button #js {:key (:path %) :className (str "file-row " (when (= (:path %) (get-in props [:ui/file :path])) "active"))
                              :onClick (fn [_] (load-file! (:path %))) :title (:path %)}
               (icon "file") (dom/span {} (:path %))) (:ui/files props)))
+    (dom/details #js {:className "tree-folder target-tree" :open true}
+      (dom/summary {} (icon "chevron") (icon "folder") (dom/span {} "target"))
+      (map (fn [target]
+             (dom/button #js {:key target :className (str "target-row " (when (= target (:ui/target props)) "active"))
+                              :onClick #(patch! {:ui/target target})}
+               (icon "database") (dom/span {} target))) targets))
     (dom/div #js {:className "sidebar-bottom"}
-      (dom/span #js {:className "local-light"}) "Connected to your machine"
-      (dom/span #js {:className "muted mono project-path" :title (get-in props [:ui/project :path])} (get-in props [:ui/project :path])))))
+      (dom/span #js {:className "project-path" :title (get-in props [:ui/project :path])} (get-in props [:ui/project :path]))))))
 
 (defn dialect-control [props]
   (dom/select #js {:value (:ui/dialect props) :aria-label "Execution dialect" :onChange #(value! :ui/dialect %)}
@@ -513,12 +610,19 @@
       (dom/div #js {:className "code-card"}
         (dom/div #js {:className "code-toolbar query-toolbar"}
           (dom/div #js {:className "segmented"}
-            (button "Visual" #(convert-query! "visual") (when visual? "selected") (:ui/converting props))
             (button "SQL" #(convert-query! "sql") (when (= "sql" mode) "selected") (:ui/converting props))
-            (button "EDN" #(convert-query! "edn") (when (= "edn" mode) "selected") (:ui/converting props)))
+            (button "EDN" #(convert-query! "edn") (when (= "edn" mode) "selected") (:ui/converting props))
+            (button "Visual" #(convert-query! "visual") (when visual? "selected") (:ui/converting props)))
           (dom/div #js {:className "query-run-actions"}
             (when-not visual? (button "Format" format-query! "small" (:ui/converting props)))
             (format-preferences props)
+            (dom/details #js {:className "query-settings"}
+              (dom/summary #js {:aria-label "Query settings" :title "Query settings"} (icon "settings"))
+              (dom/div #js {:className "query-settings-menu"}
+                (field-label "Parameters"
+                  (dom/input #js {:aria-label "Parameters" :className "mono" :value (if edn? (:ui/parameters props) (:ui/sql-parameters props))
+                                  :onChange #(value! (if edn? :ui/parameters :ui/sql-parameters) %)}))
+                (field-label "Execution dialect" (dialect-control props))))
             (button (if edn? "Run query" "Run statement") #(run-query! false) "primary" (:ui/submitting props))
             (when-not edn? (button "Run all" #(run-query! true) "small" (:ui/submitting props)))
             (dom/kbd {} "Shift+Enter / F5")))
@@ -530,39 +634,56 @@
                :onChange #(patch! {(if edn? :ui/query-edn :ui/query-sql) % :ui/conversion-note nil})
                :onSelection #(patch! {:ui/query-selection (js->clj % :keywordize-keys true)})
                :selection (clj->js (:ui/query-selection props)) :onRun (fn [all? content selection] (run-query! all? content selection))}))
-        (query-status-bar props)
-        (dom/div #js {:className "query-parameters"}
-          (field-label "Parameters · JSON"
-            (dom/input #js {:aria-label "Parameters" :className "mono" :value (if edn? (:ui/parameters props) (:ui/sql-parameters props))
-                            :onChange #(value! (if edn? :ui/parameters :ui/sql-parameters) %)}))
-          (dialect-control props)))
+        (query-status-bar props))
       (dom/div #js {:className "query-results"} (results-panel props)))))
 
-(defn result-option [r] (dom/option #js {:key (:id r) :value (:id r)} (str (or (:kind r) "result") " · " (subs (:id r) 0 (min 8 (count (:id r)))) " · " (:row_count r) " rows")))
+(defn result-option [r]
+  (dom/option #js {:key (:id r) :value (:id r)}
+    (str (str/capitalize (or (:kind r) "result")) " · " (:dialect r) " · " (:row_count r) " rows · "
+         (date-label (:created_at r)) " · " (subs (:id r) 0 (min 6 (count (:id r)))))))
 (defn comparison [props]
-  (dom/details #js {:className "comparison card"}
-    (dom/summary {} (icon "compare") "Compare saved results")
+  (dom/section #js {:className "comparison card" :aria-label "Compare saved results"}
+    (dom/div #js {:className "comparison-heading"} (icon "compare") (dom/h3 {} "Compare results"))
+    (dom/p #js {:className "hint"} "Choose a baseline and candidate to find added, removed, or changed rows.")
     (dom/div #js {:className "comparison-fields"}
-      (field-label "Left result" (dom/select #js {:aria-label "Left result" :value (:ui/left-result props) :onChange #(value! :ui/left-result %)}
-                                  (dom/option #js {:value ""} "Choose a result…") (map result-option (:ui/results props))))
-      (field-label "Right result" (dom/select #js {:aria-label "Right result" :value (:ui/right-result props) :onChange #(value! :ui/right-result %)}
-                                   (dom/option #js {:value ""} "Choose a result…") (map result-option (:ui/results props))))
-      (field-label "Key columns · comma separated"
-        (dom/input #js {:aria-label "Key columns" :value (:ui/compare-keys props) :placeholder "customer_id" :onChange #(value! :ui/compare-keys %)}))
-      (button "Compare →" run-compare! "small"
-        (or (str/blank? (:ui/left-result props)) (str/blank? (:ui/right-result props)) (:ui/submitting props))))))
+      (field-label "Baseline result" (dom/select #js {:aria-label "Baseline result" :value (:ui/left-result props) :onChange #(value! :ui/left-result %)}
+                                  (dom/option #js {:value ""} "Choose baseline…") (map result-option (remove #(= "compare" (:kind %)) (:ui/results props)))))
+      (field-label "Candidate result" (dom/select #js {:aria-label "Candidate result" :value (:ui/right-result props) :onChange #(value! :ui/right-result %)}
+                                   (dom/option #js {:value ""} "Choose candidate…") (map result-option (remove #(= "compare" (:kind %)) (:ui/results props)))))
+      (field-label "Match rows by key columns (optional)"
+        (dom/input #js {:aria-label "Key columns" :value (:ui/compare-keys props) :placeholder "customer_id, order_id" :onChange #(value! :ui/compare-keys %)}))
+      (button "Compare results" run-compare! "primary small"
+        (or (str/blank? (:ui/left-result props)) (str/blank? (:ui/right-result props))
+            (= (:ui/left-result props) (:ui/right-result props)) (:ui/submitting props))))
+    (dom/p #js {:className "hint"} "Without keys, compare complete rows. Comparisons use saved rows, without rerunning queries.")))
 (defn results-panel [props]
   (let [result (:ui/result props) page (:ui/page props) columns (:columns page)
         comparison? (= "compare" (:kind result)) summary (:summary result)
-        offset (or (:offset page) 0) limit (or (:limit page) 100) total (or (:row_count page) (:row_count result) 0)]
+        offset (or (:offset page) 0) limit (or (:limit page) 10) total (or (:row_count page) (:row_count result) 0)
+        selected-job (first (filter #(= (:job/id %) (:ui/selected-job props)) (:ui/jobs props)))
+        statements (get-in selected-job [:summary :statement_results])]
     (dom/div #js {:className "results-panel"}
       (dom/div #js {:className "panel-title"}
-        (dom/div {} (dom/span #js {:className "eyebrow"} "RESULT EXPLORER") (dom/h2 {} "See what changed."))
+        (dom/div {} (dom/span #js {:className "eyebrow"} "RESULT EXPLORER") (dom/h2 {} "Results"))
         (when result (pill (str (:row_count result) " rows") "accent")))
-      (dom/div #js {:className "result-picker"}
-        (dom/select #js {:aria-label "Saved result" :value (or (:id result) "") :onChange #(when-not (str/blank? (.. % -target -value)) (load-result! (.. % -target -value)))}
-          (dom/option #js {:value ""} "Choose a saved result…") (map result-option (:ui/results props)))
-        (when result (dom/a #js {:className "button small" :href (str "/api/results/" (:id result) "/download?format=csv")} "Download CSV ↓")))
+      (when (= "results" (:ui/tab props)) (comparison props))
+      (dom/div #js {:className "result-toolbar"}
+        (dom/nav #js {:className "result-tabs" :aria-label "Statement results"}
+          (if (seq statements)
+            (map (fn [item]
+                   (dom/button #js {:key (:result_id item) :className (str "result-tab " (when (= (:result_id item) (:id result)) "active"))
+                                    :aria-pressed (= (:result_id item) (:id result))
+                                    :onClick #(load-result! (:result_id item) 0 true)}
+                     (icon "model") (str "Result " (:statement_index item) " · " (:row_count item) " rows"))) statements)
+            (dom/span #js {:className "result-tab active"} (icon "model") "Results")))
+        (when result (dom/span #js {:className "result-count"} (str total " rows")))
+        (dom/details #js {:className "saved-results"}
+          (dom/summary #js {:title "Browse history" :aria-label "Browse history"} (icon "clock"))
+          (dom/div #js {:className "result-picker"}
+            (field-label "Saved result"
+              (dom/select #js {:aria-label "Saved result" :value (or (:id result) "") :onChange #(when-not (str/blank? (.. % -target -value)) (load-result! (.. % -target -value)))}
+                (dom/option #js {:value ""} "Choose a saved result...") (map result-option (:ui/results props))))))
+        (when result (dom/a #js {:className "icon-button" :aria-label "Download CSV" :title "Download CSV" :href (str "/api/results/" (:id result) "/download?format=csv")} (icon "download"))))
       (if result
         (dom/div {}
           (when comparison?
@@ -571,8 +692,6 @@
               (dom/span {} (str (:left_rows summary) " left rows · " (:right_rows summary) " right rows"))
               (when (false? (:schema_equal summary)) (dom/p #js {:className "schema-difference"} "Column types/names differ."))
               (dom/p #js {:className "hint"} (or (:comparison_scope summary) "Comparison applies to these saved result rows."))))
-          (dom/div #js {:className "result-meta"} (pill (or (:dialect result) (:kind result)) "neutral")
-            (dom/span #js {:className "muted mono"} (str "result / " (subs (:id result) 0 (min 12 (count (:id result)))))))
           (dom/div #js {:className "grid-wrap"}
             (dom/table #js {:className "result-grid"}
               (dom/thead {} (dom/tr {} (dom/th #js {:className "row-number"} "#")
@@ -586,29 +705,40 @@
                                                   (if (nil? value) "null" (if (or (map? value) (vector? value)) (json-display value) (str value))))) row))) (:rows page)))))
           (when (empty? (:rows page)) (dom/p #js {:className "empty-rows"} (if comparison? "No row differences were found." "The query returned no rows.")))
           (dom/div #js {:className "pagination"}
-            (dom/span {} (str (if (zero? total) 0 (inc offset)) "–" (min total (+ offset (count (:rows page)))) " of " total))
-            (dom/div {} (button "← Previous" #(load-result! (:id result) (max 0 (- offset limit))) "small" (zero? offset))
-              (button "Next →" #(load-result! (:id result) (+ offset limit)) "small" (>= (+ offset limit) total))))
+            (dom/span {} (str (if (zero? total) 0 (inc offset)) "-" (min total (+ offset (count (:rows page)))) " of " total " rows"))
+            (dom/div {} (button "Previous" #(load-result! (:id result) (max 0 (- offset limit))) "small" (zero? offset))
+              (dom/span #js {:className "page-number"} (str (inc (quot offset limit))))
+              (button "Next" #(load-result! (:id result) (+ offset limit)) "small" (>= (+ offset limit) total))))
           (dom/details #js {:className "result-sql card"}
             (dom/summary {} "SQL & provenance")
             (dom/h4 {} "EXECUTED SQL") (dom/pre {} (json-display (:sql result)))
             (dom/h4 {} "INPUT PROVENANCE") (dom/pre {} (json-display (:provenance result)))))
         (dom/div #js {:className "empty-editor"} (icon "play") (dom/h3 {} "An idea, then a result.")
           (dom/p {} "Preview a model or run a query. Its result will appear here with a record of SQL and input bindings.")))
-      (comparison props))))
+      )))
 
 (defn job-activity [props]
   (let [selected (first (filter #(= (:job/id %) (:ui/selected-job props)) (:ui/jobs props)))
         active? (#{"queued" "running" "cancelling"} (:status selected))]
     (dom/aside #js {:className "activity"}
-
+      (dom/div #js {:className "activity-filter"}
+        (dom/select #js {:aria-label "Filter activity" :value (:ui/job-filter props) :onChange #(value! :ui/job-filter %)}
+          (map (fn [[value label]] (dom/option #js {:key value :value value} label))
+            [["all" "All activity"] ["query" "Queries"] ["build" "Builds"] ["test" "Tests"] ["failed" "Failed runs"]])))
       (dom/div #js {:className "job-list"}
-        (if (seq (:ui/jobs props)) (map #(job-row (comp/computed % {:active (= (:job/id %) (:ui/selected-job props))})) (:ui/jobs props))
+        (if (seq (:ui/jobs props)) (map #(job-row (comp/computed % {:active (= (:job/id %) (:ui/selected-job props))}))
+                                   (filter #(case (:ui/job-filter props) "all" true "failed" (= "failed" (:status %)) (= (:ui/job-filter props) (:kind %))) (:ui/jobs props)))
           (dom/div #js {:className "activity-empty"} (icon "clock") (dom/p {} "Your runs land here.") (dom/span {} "Build, test, or preview to get started."))))
       (when selected
         (dom/div #js {:className "job-details"}
-          (dom/div #js {:className "log-heading"} (dom/strong {} (str/capitalize (:kind selected)))
+          (dom/div #js {:className "log-heading"} (dom/strong {} "Activity details")
             (when active? (button "Cancel" #(cancel-job! (:job/id selected)) "small danger" (= "cancelling" (:status selected)))))
+          (dom/dl #js {:className "activity-metadata"}
+            (dom/dt {} "Started") (dom/dd {} (date-label (or (:started_at selected) (:created_at selected))))
+            (dom/dt {} "Status") (dom/dd #js {:className "detail-status"}
+                                    (dom/span #js {:className (str "status-dot " (:status selected))}) (str/capitalize (:status selected)))
+            (dom/dt {} "Target") (dom/dd {} (or (get-in selected [:options :target]) (:ui/target props)))
+            (dom/dt {} "Type") (dom/dd {} (str/capitalize (:kind selected))))
           (when (= "query" (:kind selected))
             (dom/div #js {:className "replay-actions"}
               (button "Load query" #(load-query! selected) "small")
@@ -616,18 +746,16 @@
           (dom/details #js {:className "job-summary"}
             (dom/summary {} "Run metadata")
             (dom/pre {} (json-display (select-keys selected [:created_at :started_at :finished_at :status :options :result_id]))))
-          (when-let [statements (get-in selected [:summary :statement_results])]
-            (dom/div #js {:className "statement-results"}
-              (map (fn [item] (button (str "Result " (:statement_index item) " · " (:row_count item) " rows")
-                                      #(load-result! (:result_id item) 0 (= "query" (:ui/tab props))) "small")) statements)))
           (when (:error selected) (dom/div #js {:className "job-error"} (human-error (:error selected))))
           (when (:summary selected) (dom/details #js {:className "job-summary"} (dom/summary {} "Run summary") (dom/pre {} (json-display (:summary selected)))))
-          (dom/div #js {:className "log-view" :role "log" :aria-label "Job logs"}
+          (dom/details #js {:className "job-logs" :open (boolean active?)}
+            (dom/summary {} "Logs")
+            (dom/div #js {:className "log-view" :role "log" :aria-label "Job logs"}
             (if (seq (:ui/events props))
               (map #(dom/div #js {:className (str "log-line " (:level %)) :key (:seq %)}
                       (dom/span #js {:className "log-time"} (date-label (:timestamp %)))
                       (dom/span {} (:message %))) (:ui/events props))
-              (dom/p #js {:className "muted"} (if active? "Waiting for output…" "No log output.")))))))))
+              (dom/p #js {:className "muted"} (if active? "Waiting for output…" "No log output."))))))))))
 
 (defn changes-panel [props]
   (dom/div #js {:className "changes-panel"}
@@ -645,16 +773,16 @@
 (defn activity [props]
   (dom/aside #js {:className "history-panel"}
     (dom/nav #js {:className "history-tabs" :aria-label "History"}
-      (button "Activity" #(patch! {:ui/activity-tab "activity"}) (when (= "activity" (:ui/activity-tab props)) "selected"))
-      (button "Changes" #(patch! {:ui/activity-tab "changes"}) (when (= "changes" (:ui/activity-tab props)) "selected")))
+      (dom/button #js {:className (str "button " (when (= "activity" (:ui/activity-tab props)) "selected")) :onClick #(patch! {:ui/activity-tab "activity"})} (icon "clock") "Activity")
+      (dom/button #js {:className (str "button " (when (= "changes" (:ui/activity-tab props)) "selected")) :onClick #(patch! {:ui/activity-tab "changes"})} (icon "changes") "Changes"))
     (if (= "changes" (:ui/activity-tab props)) (changes-panel props) (job-activity props))))
 
 (defsc Root [_ props]
-  {:query [:ui/projects :ui/project :ui/files :ui/results :ui/target :ui/defer :ui/favor-state
+  {:query [:ui/theme :ui/projects :ui/project :ui/files :ui/results :ui/target :ui/defer :ui/favor-state
            :ui/tab :ui/model-id :ui/file :ui/content :ui/saved-content :ui/selected-job
            :ui/events :ui/event-cursor :ui/result :ui/page :ui/error :ui/notice :ui/submitting
            :ui/open-path :ui/profiles :ui/query-format :ui/query-edn :ui/query-sql :ui/parameters :ui/sql-parameters
-           :ui/catalog :ui/visual-query :ui/format-options :ui/editor-revision :ui/query-job :ui/query-requesting :ui/query-selection :ui/converting :ui/conversion-note :ui/model-search :ui/build-scope :ui/activity-tab :ui/changes
+           :ui/catalog :ui/visual-query :ui/format-options :ui/editor-revision :ui/query-job :ui/query-requesting :ui/query-selection :ui/converting :ui/conversion-note :ui/model-search :ui/build-scope :ui/activity-tab :ui/changes :ui/job-filter
            :ui/dialect :ui/baseline-input :ui/left-result :ui/right-result :ui/compare-keys :ui/conflict :ui/artifact-dir :ui/reference-target
            {:ui/models (comp/get-query ModelRow)} {:ui/jobs (comp/get-query JobRow)}]
    :initial-state (fn [_] initial)}
@@ -662,24 +790,15 @@
         dirty (not= (:ui/content props) (:ui/saved-content props))]
     (dom/div #js {:className "app-shell"}
       (dom/header #js {:className "app-header"}
-        (dom/button #js {:className "brand" :onClick #(when (may-discard?) (patch! {:ui/project nil :ui/error nil :ui/notice nil :ui/content "" :ui/saved-content ""})) :title "All projects"}
-          (dom/span #js {:className "brand-mark"} "w") (dom/span {} "workbench") (pill "LOCAL"))
+        (dom/button #js {:className "brand" :onClick choose-project! :title "All projects"}
+          (dom/span #js {:className "brand-mark"} "w") (dom/span {} "workbench"))
         (when project
           (dom/div #js {:className "project-switch"}
-            (dom/span #js {:className "header-divider"} "/")
-            (dom/select #js {:aria-label "Project" :value (:id project) :onChange #(load-project! (.. % -target -value))}
-              (map #(dom/option #js {:key (:id %) :value (:id %)} (:name %)) (:ui/projects props)))
+            (dom/span #js {:className "header-divider" :aria-hidden true})
+            (dom/div #js {:className "target-control"} (icon "database")
             (dom/select #js {:aria-label "Target" :value (:ui/target props) :onChange #(value! :ui/target %)}
-              (map #(dom/option #js {:key % :value %} %) (or (seq (:targets project)) ["dev"])))))
-        (dom/div #js {:className "header-right"} (dom/span #js {:className "local-light"}) "Local session"))
-      (when (:ui/error props)
-        (dom/div #js {:className "message error" :role "alert"} (dom/span {} (:ui/error props))
-          (dom/button #js {:className "icon-button" :aria-label "Dismiss error" :onClick #(patch! {:ui/error nil})} "×")))
-      (when (:ui/notice props)
-        (dom/div #js {:className "message notice" :role "status"} (dom/span {} (:ui/notice props))
-          (dom/button #js {:className "icon-button" :aria-label "Dismiss notice" :onClick #(patch! {:ui/notice nil})} "×")))
-      (if-not project (welcome props)
-        (dom/div #js {:className "project-shell"}
+              (map #(dom/option #js {:key % :value %} %) (or (seq (:targets project)) ["dev"]))))))
+        (when project
           (dom/div #js {:className "run-toolbar"}
             (dom/div #js {:className "run-actions"}
               (button "Test" #(submit! "test" (build-options props)) "small" (or dirty (:ui/submitting props)))
@@ -697,7 +816,21 @@
                     (dom/div {}
                       (checkbox "Use baseline refs" :ui/defer (:ui/defer props))
                       (checkbox "Prefer baseline relations" :ui/favor-state (:ui/favor-state props))))
-                  (button "Refresh model graph" #(submit! "parse" {}) "small" (:ui/submitting props))))))
+                  (button "Refresh model graph" #(submit! "parse" {}) "small" (:ui/submitting props)))))))
+        (dom/div #js {:className "theme-control"} (icon "theme")
+          (dom/select #js {:aria-label "Theme" :value (:ui/theme props) :onChange #(choose-theme! (.. % -target -value))}
+            (dom/option #js {:value "system"} "System theme")
+            (dom/option #js {:value "light"} "Light theme")
+            (dom/option #js {:value "dark"} "Dark theme")))
+        (dom/div #js {:className "header-right"} (dom/span #js {:className "local-light"}) "Local session"))
+      (when (:ui/error props)
+        (dom/div #js {:className "message error" :role "alert"} (dom/span {} (:ui/error props))
+          (dom/button #js {:className "icon-button" :aria-label "Dismiss error" :onClick #(patch! {:ui/error nil})} "×")))
+      (when (:ui/notice props)
+        (dom/div #js {:className "message notice" :role "status"} (dom/span {} (:ui/notice props))
+          (dom/button #js {:className "icon-button" :aria-label "Dismiss notice" :onClick #(patch! {:ui/notice nil})} "×")))
+      (if-not project (welcome props)
+        (dom/div #js {:className "project-shell"}
           (dom/div #js {:className "workspace"}
             (sidebar props)
             (dom/main #js {:className "main-pane"}
@@ -715,7 +848,19 @@
   (refresh)
   (try (when-let [saved (js/localStorage.getItem "workbench.sql-format-options")] (patch! {:ui/format-options (merge (:ui/format-options initial) (js->clj (js/JSON.parse saved) :keywordize-keys true))})) (catch :default _ nil))
   (format-query!)
-  (load-projects!)
+  (let [saved-theme (read-preference "workbench.theme")
+        theme (if (#{"light" "dark" "system"} saved-theme) saved-theme "system")]
+    (choose-theme! theme)
+    (.addEventListener (js/window.matchMedia "(prefers-color-scheme: dark)") "change"
+      (fn [_] (apply-theme! (:ui/theme (current))))))
+  (-> (request! "GET" "/api/projects")
+      (.then (fn [data]
+               (patch! {:ui/projects (:projects data)})
+               (when-let [id (read-preference "workbench.project")]
+                 (if (some #(= id (:id %)) (:projects data))
+                   (load-project! id)
+                   (save-preference! "workbench.project" nil)))))
+      (.catch report-error!))
   (js/window.addEventListener "beforeunload"
     (fn [event] (when (dirty?) (.preventDefault event) (set! (.-returnValue event) ""))))
   (when @timer (js/clearInterval @timer))

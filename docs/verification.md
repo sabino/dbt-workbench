@@ -18,19 +18,33 @@ Unsupported conversion nodes are rejected while the browser retains its draft.
 
 ## Browser
 
-`bun run test:browser` passed **14 job workflows with zero uncaught browser errors**.
+`bun run test:browser` passed **15 job workflows with zero uncaught browser errors**.
 It runs an isolated temporary server and checks Build/Test, highlighting and line numbers,
 Shift+Enter/F5, selection and cursor execution, editor focus, sequential results,
 Visual filters, aggregation, and qualified joins, SQL/HoneySQL EDN conversion, parameter roundtrips, formatting preferences,
 invalid draft retention, cross-engine comparison,
 Load/Replay, saved-file Changes history, cancellation through the editor status bar,
 query recovery, and history after reload.
+The selected project survives refresh. **Choose project** clears that selection and opens the project chooser.
+The header theme selector offers System, Light, and Dark, and preserves its setting across refresh.
+Comparison appears only in Results, with baseline and candidate selectors, optional keys, and identical-result prevention.
+The [comparison screen](workbench-results-compare.png) and [dark autocomplete](workbench-autocomplete-dark.png) show these controls.
+Browser checks verify popup colors, theme overrides, system changes, project restoration, and explicit project switching.
 
-The generated [design reference](workbench-design-reference.png) guided the three-column layout,
-editor, result grid, and Activity/Changes panel. The rendered [query lab](workbench-query-lab.png)
-was inspected against it and refined for readable syntax, aligned gutters, and status feedback.
+The [IDE reference](workbench-ide-reference.png) guides dark surfaces, mint controls, compact tool groups, and workspace hierarchy.
+The [light reference](workbench-design-reference.png) guides the light palette and workspace proportions.
+The [rendered query workspace](workbench-query-lab.png) uses real query results with ten rows per page.
+Parameters and execution dialect are under **Query settings**. Statement results appear as tabs above the grid.
+
+Browser checks cover pagination, model search, Activity filtering, visible desktop pagination,
+and horizontal overflow at 390, 768, 1024, 1280, and 1536 pixels.
+The [dark theme](workbench-query-dark.png) and [mobile layout](workbench-query-mobile.png) use the same controls.
+Body, secondary text, and primary button colors pass WCAG AA in both themes.
+
 The [EDN editor](workbench-query-edn.png), [Visual builder](workbench-query-visual.png),
-and [Changes history](workbench-changes.png) are captured from the same browser verification.
+and [Changes history](workbench-changes.png) are captured from browser verification.
+The frontend build compiles individual Phosphor icons through package ESM exports.
+Frontend lint uses explicit Fulcro macro handling; compilation reports zero warnings.
 
 ## Commands
 
