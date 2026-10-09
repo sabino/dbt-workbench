@@ -1,6 +1,6 @@
 # Third-party notices
 
-The application source is licensed under MIT. Third-party code remains under its own licenses. This file records the vendored demo and the principal libraries compiled into, or supplied with, the browser application. It is not an exhaustive inventory of separately installed Python dependencies or build tools; their distributions retain their own notices. Compiler optimization can remove portions of these libraries from a particular JavaScript build.
+The application source is licensed under MIT. Third-party code remains under its own licenses. This file records the vendored demo and the principal libraries compiled into, or supplied with, the browser application. It is not an exhaustive inventory of separately installed JVM dependencies or build tools; their distributions retain their own notices. Compiler optimization can remove portions of these libraries from a particular JavaScript build.
 
 The license texts below were taken from the installed npm packages and Maven/Clojars artifacts, or the exact source tag named by an artifact's POM when that artifact omitted its license file. The original third-party source has not been edited; it is compiled or bundled as part of the application. Source code is available through the linked projects and the listed package versions.
 
@@ -8,6 +8,7 @@ The license texts below were taken from the installed npm packages and Maven/Clo
 
 | Component | Version | License / attribution | Source |
 | --- | --- | --- | --- |
+| CodeMirror state/view/language/commands/SQL/autocomplete | 6.7.6 / 6.43.13 / 6.12.4 / 6.11.1 / 6.10.0 / 6.20.3 | MIT; Marijn Haverbeke and contributors | https://github.com/codemirror |
 | React, React DOM | 18.3.1 | MIT; Copyright (c) Facebook, Inc. and its affiliates | https://github.com/facebook/react/tree/v18.3.1 |
 | Scheduler | 0.23.2 | MIT; Copyright (c) Facebook, Inc. and its affiliates | https://www.npmjs.com/package/scheduler/v/0.23.2 |
 | Fulcro | 3.10.0 | MIT; Copyright (c) 2017–2019, Fulcrologic, LLC | https://github.com/fulcrologic/fulcro/tree/fulcro-3.10.0 |
@@ -867,3 +868,68 @@ Applies to Closure Library, Colossal SQUUID, and Classic Jaffle Shop. The compon
 
    END OF TERMS AND CONDITIONS
 ```
+
+## CodeMirror MIT notice
+
+Copyright (C) 2018-2026 by Marijn Haverbeke and others
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+## SQL Formatter 15.9.0 MIT notice
+
+The MIT License (MIT)
+
+Copyright (c) 2016-2020 ZeroTurnaround LLC
+Copyright (c) 2020-2021 George Leslie-Waksman and other contributors
+Copyright (c) 2021-Present inferrinizzard and other contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+## Nextjournal Clojure grammar 1.0.0 ISC notice
+
+Copyright 2022 Nextjournal GmbH.
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.

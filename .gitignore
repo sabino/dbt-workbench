@@ -36,3 +36,7 @@ workbench-data/
 
 # Editor and OS files
 .DS_Store
+
+.tools/
+.cpcache/
+.nrepl-port

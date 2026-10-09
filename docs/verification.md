@@ -1,64 +1,55 @@
 # Verification
 
-Validated on Linux with Python 3.12, Java 21 for the frontend build, and headless
-Chromium. Runtime engine versions are pinned in `pyproject.toml` and `uv.lock`.
+Validated on macOS ARM64 on 2026-10-09, with Java, Clojure, Bun 1.4.2, native dbt 2.0.5, and headless Chromium.
+The application runtime uses no Python. Dependency versions are pinned in `deps.edn` and `frontend/bun.lock`.
 
-Completed on 2026-10-09: **99 tests and 12 subtests passed**. The full browser
-workflow completed **11 jobs**: ten succeeded and the deliberate long query was
-cancelled. It recorded **zero uncaught browser errors**. Five additional fast-query
-checks confirmed that completed results open once and later navigation is kept.
+## Backend
 
-## Automated checks
+`clojure -M:test` passed **16 tests and 96 assertions** against real dbt, DuckDB JDBC, SQLite, and HTTP requests.
+The demo builds three seeds and five models and passes 20 dbt tests.
+
+Coverage includes revision conflicts, durable edit history, path restrictions, HTTP validation and same-origin enforcement,
+HoneySQL parameters, SQL/EDN execution roundtrips, CTEs, ordered joins, grouping, DISTINCT, CASE,
+sequential queries, partial failures, cancellation, row limits, preview compilation, baseline deferral,
+duplicate-preserving comparison, lexical parameter boundaries, demo YAML upgrades, catalog columns,
+shared database attachments, nested staging-model previews and selected builds, selector fallback before parsing,
+and interrupted-job recovery after restart.
+Unsupported conversion nodes are rejected while the browser retains its draft.
+
+## Browser
+
+`bun run test:browser` passed **14 job workflows with zero uncaught browser errors**.
+It runs an isolated temporary server and checks Build/Test, highlighting and line numbers,
+Shift+Enter/F5, selection and cursor execution, editor focus, sequential results,
+Visual filters, aggregation, and qualified joins, SQL/HoneySQL EDN conversion, parameter roundtrips, formatting preferences,
+invalid draft retention, cross-engine comparison,
+Load/Replay, saved-file Changes history, cancellation through the editor status bar,
+query recovery, and history after reload.
+
+The generated [design reference](workbench-design-reference.png) guided the three-column layout,
+editor, result grid, and Activity/Changes panel. The rendered [query lab](workbench-query-lab.png)
+was inspected against it and refined for readable syntax, aligned gutters, and status feedback.
+The [EDN editor](workbench-query-edn.png), [Visual builder](workbench-query-visual.png),
+and [Changes history](workbench-changes.png) are captured from the same browser verification.
+
+## Commands
 
 ```sh
-uv sync --extra test
-uv run pytest -q
-uv run playwright install chromium
-uv run python tests/browser_smoke.py --output /tmp/workbench-browser
-uv build
+./scripts/install-dbt.sh
+clojure -M:test
+clj-kondo --lint src test
+cd frontend
+bun ci
+bun run build
+bun test src
+bun run test:browser
 ```
 
-The Python suite has **99 tests**, including three full integration workflows,
-plus **12 parameterized subtests**. It uses real dbt, DuckDB, and SQLite.
-The browser script starts a separate temporary server and drives the actual
-Fulcro interface; its output directory contains screenshots, a downloaded CSV,
-and a JSON record of the submitted jobs.
+Five frontend tests passed, covering statement boundaries, UTF-16 offsets, selections, empty input,
+named-parameter and literal preservation during formatting, keyword case, and tab indentation.
+The optimized frontend build completed without compilation warnings. Backend lint completed with zero errors and zero warnings.
+Browser evidence is written to `/tmp/workbench-clojure-browser`.
+CI is configured with the same build and test commands; a hosted CI run is separate evidence.
 
-![Verified workbench result view](workbench.png)
-
-The tested Jaffle Shop workflow builds three seeds and five models, passes all
-20 dbt tests, and saves a reference manifest. It changes `orders` to include only
-completed orders, builds that selected model in development with upstream
-deferral, and compares **99 baseline rows against 67 development rows**.
-A parameterized EDN aggregation returns **48 matching rows** from DuckDB and
-SQLite. Column types differ, and that difference is reported separately.
-
-The browser workflow also exercises saved baseline SQL, result comparison,
-native SQL, CSV download, cancellation, a successful query after cancellation,
-and history after reloading the page. It must finish without uncaught browser
-errors. The frontend release compiler completes without warnings.
-
-## Regression coverage
-
-- dbt artifact statuses are checked even if the process exits successfully.
-- Revision conflicts, symlinks, path traversal, active-job edit protection, and
-  foreign browser origins are covered.
-- CTE scope, identifier case, correlated columns, default schemas, and physical
-  relation bindings are checked against native DuckDB behavior.
-- Unsafe query forms, implicit external file scans, unsupported SQLite decimal
-  inputs, row limits, deadlines, and cancellation have explicit cases.
-- Truncated results cannot report complete equality. Row equality and schema
-  equality are distinct.
-- Saved events/results survive restart, duplicate application instances are
-  rejected, and stale baseline IDs cannot silently use current state.
-
-## Distribution check
-
-The wheel was installed into a clean Python environment and used to start the
-server, serve its HTML and compiled JavaScript, and create the packaged Jaffle
-Shop demo. It includes the frontend, demo seeds/models, and third-party notices.
-Node and Java are not needed to run an installed distribution.
-
-These checks validate the implemented DuckDB/SQLite workflow. They do not
-certify arbitrary SQLGlot dialect pairs, warehouse adapters, or semantic
-equivalence for all SQL. See [limits](limitations.md) and [roadmap](roadmap.md).
+Legacy Arrow result rows require rerunning their stored queries after migration.
+Baseline artifacts preserve dbt state rather than immutable source data.

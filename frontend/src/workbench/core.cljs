@@ -1,14 +1,19 @@
 (ns workbench.core
   (:require [clojure.string :as str]
+            [cljs.reader :as reader]
+            [cljs.pprint :as pprint]
+            [workbench.builder :as builder]
+            ["react" :as react]
+            ["./editor.js" :as editor]
             [com.fulcrologic.fulcro.application :as app]
             [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
             [com.fulcrologic.fulcro.dom :as dom]
             [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]))
 
 (declare application load-project! load-file! select-model! select-job! load-result!
-         submit! refresh-project! save-file! create-demo! open-project! cancel-job! import-baseline!)
+         submit! refresh-project! save-file! create-demo! open-project! cancel-job! import-baseline! convert-query! load-query! load-changes! run-query! json-display load-catalog! format-query! save-format-options!)
 
-(def default-edn "{:query/version 1\n :from {:model \"model.jaffle_shop.orders\" :as \"o\"}\n :select [{:as \"customer_id\" :expr [:field \"o\" \"customer_id\"]}\n          {:as \"revenue\" :expr [:sum [:field \"o\" \"amount\"]]}]\n :where [:eq [:field \"o\" \"status\"] [:param \"status\" :text]]\n :group-by [[:field \"o\" \"customer_id\"]]\n :order-by [[:field \"o\" \"customer_id\"]]}")
+(def default-edn "{:select [:customer_id [[:sum :amount] :revenue]]\n :from [:orders]\n :group-by [:customer_id]\n :order-by [[:customer_id :asc]]}")
 (def default-sql "SELECT customer_id, SUM(amount) AS revenue\nFROM orders\nGROUP BY customer_id\nORDER BY customer_id")
 (def initial
   {:ui/projects [] :ui/project nil :ui/models [] :ui/jobs [] :ui/files []
@@ -16,8 +21,11 @@
    :ui/tab "model" :ui/model-id nil :ui/file nil :ui/content "" :ui/saved-content ""
    :ui/selected-job nil :ui/events [] :ui/event-cursor 0 :ui/result nil :ui/page nil
    :ui/error nil :ui/notice nil :ui/submitting false :ui/open-path "" :ui/profiles ""
-   :ui/query-format "edn" :ui/query-edn default-edn :ui/query-sql default-sql
+   :ui/catalog [] :ui/visual-query nil :ui/format-options {:keywordCase "upper" :useTabs false :tabWidth 2 :indentStyle "standard" :logicalOperatorNewline "before" :expressionWidth 50 :linesBetweenQueries 2}
+   :ui/query-format "sql" :ui/query-edn default-edn :ui/query-sql default-sql
    :ui/parameters "{\"status\": \"completed\"}" :ui/sql-parameters "{}" :ui/dialect "duckdb" :ui/baseline-input false
+   :ui/editor-revision 0 :ui/query-job nil :ui/query-requesting false :ui/query-selection {:from 0 :to 0 :head 0} :ui/converting false :ui/conversion-note nil
+   :ui/model-search "" :ui/build-scope "project" :ui/activity-tab "activity" :ui/changes []
    :ui/left-result "" :ui/right-result "" :ui/compare-keys "" :ui/conflict false :ui/artifact-dir "" :ui/reference-target "prod"})
 
 (defmutation change [{:keys [updates]}]
@@ -33,7 +41,10 @@
             (assoc root (mapv #(vector table (get % table)) entities))))))))
 
 (defn current [] (app/current-state application))
-(defn patch! [updates] (comp/transact! application [(change {:updates updates})]))
+(defn patch! [updates]
+  (comp/transact! application [(change {:updates updates})] {:synchronous? true})
+  ;; Root-level forms need fresh props before the next input event.
+  (app/render! application))
 (defn value! [key event] (patch! {key (.. event -target -value)}))
 (defn checked! [key event] (patch! {key (.. event -target -checked)}))
 (defn project-id [] (get-in (current) [:ui/project :id]))
@@ -43,7 +54,7 @@
 (defn human-error [x]
   (cond (string? x) x (map? x) (or (:message x) (pr-str x)) :else (str x)))
 (defn report-error! [error]
-  (patch! {:ui/error (or (.-message error) (str error)) :ui/submitting false}))
+  (patch! {:ui/error (or (.-message error) (str error)) :ui/submitting false :ui/query-requesting false}))
 (defn request! [method url & [body]]
   (-> (js/fetch url
         (clj->js (cond-> {:method method :headers {"Content-Type" "application/json"}}
@@ -75,22 +86,26 @@
 (defn load-results! [id]
   (-> (request! "GET" (str "/api/projects/" id "/results"))
     (.then #(when (= id (project-id)) (patch! {:ui/results (:results %)}))) (.catch report-error!)))
+(defn load-changes! [id]
+  (-> (request! "GET" (str "/api/projects/" id "/changes"))
+    (.then #(when (= id (project-id)) (patch! {:ui/changes (:changes %)})))
+    (.catch report-error!)))
 (defn refresh-project! []
   (when-let [id (project-id)]
     (-> (request! "GET" (str "/api/projects/" id))
       (.then #(when (= id (project-id)) (patch! {:ui/project %}))) (.catch report-error!))
-    (load-models! id) (load-files! id) (load-results! id)))
+    (load-models! id) (load-files! id) (load-results! id) (load-changes! id) (load-catalog!)))
 (defn load-project! [id]
   (when (may-discard?)
     (patch! {:ui/error nil :ui/notice nil :ui/file nil :ui/content "" :ui/saved-content ""
-           :ui/models [] :ui/jobs [] :ui/events [] :ui/event-cursor 0 :ui/selected-job nil
-           :ui/result nil :ui/page nil :ui/results [] :ui/model-id nil :ui/conflict false})
+           :ui/models [] :ui/jobs [] :ui/events [] :ui/event-cursor 0 :ui/selected-job nil :ui/query-job nil :ui/query-requesting false
+           :ui/result nil :ui/page nil :ui/results [] :ui/model-id nil :ui/conflict false :ui/changes [] })
   (-> (request! "GET" (str "/api/projects/" id))
     (.then (fn [project]
              (let [targets (:targets project)
                    target (if (some #{"dev"} targets) "dev" (or (first targets) "dev"))]
                (patch! {:ui/project project :ui/target target :ui/tab "model"})
-               (load-projects!) (load-models! id) (load-files! id) (load-results! id))))
+               (load-projects!) (load-models! id) (load-files! id) (load-results! id) (load-changes! id) (load-catalog!))))
     (.catch report-error!))))
 (defn create-demo! []
   (patch! {:ui/submitting true :ui/error nil})
@@ -104,13 +119,14 @@
         (-> (request! "POST" "/api/projects/open"
               (cond-> {:path path} (not (str/blank? (:ui/profiles s))) (assoc :profiles_dir (:ui/profiles s))))
           (.then #(do (patch! {:ui/submitting false}) (load-project! (:id %)))) (.catch report-error!))))))
-(defn load-file! [path]
+(defn load-file! [path & [draft]]
   (when (may-discard?)
     (let [id (project-id)]
     (-> (request! "GET" (str "/api/projects/" id "/file?path=" (js/encodeURIComponent path)))
       (.then (fn [file]
                (when (= id (project-id))
-                 (patch! {:ui/file file :ui/content (:content file) :ui/saved-content (:content file)
+                 (patch! {:ui/file file :ui/content (if draft (:content draft) (:content file))
+                           :ui/saved-content (:content file)
                           :ui/model-id (:unique_id (first (filter #(= path (:path %)) (vals (:model/id (current))))))
                           :ui/tab "model" :ui/conflict false :ui/error nil}))))
       (.catch report-error!)))))
@@ -124,50 +140,130 @@
             {:path (:path file) :content (:ui/content s) :expected_revision (:revision file)})
         (.then #(do (patch! {:ui/file % :ui/saved-content (:content %) :ui/content (:content %)
                             :ui/submitting false :ui/conflict false :ui/notice "File saved to your project."})
-                     (load-models! (project-id))))
+                     (load-models! (project-id)) (load-changes! (project-id))))
         (.catch (fn [e]
                   (if (and (= 409 (.-status e)) (not (str/starts-with? (.-message e) "Wait for")))
                     (patch! {:ui/conflict true :ui/submitting false
                              :ui/error "This file changed on disk. Your draft is preserved. Copy it before reloading, or keep editing."})
                     (report-error! e))))))))
 (defn job-options []
-  (let [s (current)] {:target (:ui/target s) :defer (:ui/defer s) :favor_state (:ui/favor-state s)}))
+  (let [s (current) defer (and (:ui/defer s) (get-in s [:ui/project :baseline]))]
+    {:target (:ui/target s) :defer (boolean defer) :favor_state (boolean (and defer (:ui/favor-state s)))}))
 (defn submit! [kind options]
-  (patch! {:ui/submitting true :ui/error nil :ui/notice nil})
+  (patch! {:ui/submitting true :ui/query-requesting (= "query" kind) :ui/error nil :ui/notice nil})
   (-> (request! "POST" (api-path "/jobs") {:kind kind :options (merge (job-options) options)})
     (.then (fn [job]
-             (patch! {:ui/submitting false})
+             (patch! (cond-> {:ui/submitting false :ui/query-requesting false} (= "query" kind) (assoc :ui/query-job (:id job))))
              (select-job! (:id job))
-             (when (#{"query" "preview" "compare"} kind) (patch! {:ui/notice "Query queued. Results will open when it finishes."}))))
+             (when (#{"preview" "compare"} kind) (patch! {:ui/notice "Results will open when the job finishes."}))))
     (.catch report-error!)))
 (defn select-job! [id]
   (patch! {:ui/selected-job id :ui/events [] :ui/event-cursor 0}))
 (defn cancel-job! [id]
   (-> (request! "POST" (str "/api/jobs/" id "/cancel") {})
-    (.then #(patch! {:ui/notice (str "Cancellation requested for " (:kind %) ".")}))
+    (.then #(when-not (= "query" (:kind %)) (patch! {:ui/notice (str "Cancellation requested for " (:kind %) ".")})))
     (.catch report-error!)))
-(defn load-result! [id & [offset]]
+(defn load-result! [id & [offset keep-editor?]]
   (let [offset (or offset 0)]
     (-> (js/Promise.all #js [(request! "GET" (str "/api/results/" id))
                              (request! "GET" (str "/api/results/" id "/rows?offset=" offset "&limit=100"))])
       (.then (fn [data]
-               (patch! {:ui/result (aget data 0) :ui/page (aget data 1) :ui/tab "results" :ui/error nil})))
+               (patch! {:ui/result (aget data 0) :ui/page (aget data 1) :ui/tab (if (or keep-editor? (= "query" (:ui/tab (current)))) (:ui/tab (current)) "results") :ui/error nil})))
       (.catch report-error!))))
-(defn run-query! []
-  (let [s (current) input (if (= "edn" (:ui/query-format s)) (:ui/parameters s) (:ui/sql-parameters s))]
+(defn query-parameters [s]
+  (let [input (if (= "sql" (:ui/query-format s)) (:ui/sql-parameters s) (:ui/parameters s))
+        parameters (js->clj (js/JSON.parse (if (str/blank? input) "{}" input)) :keywordize-keys true)]
+    (when-not (map? parameters) (throw (js/Error. "Parameters must be a JSON object.")))
+    parameters))
+
+(defn run-query! [& [all? editor-content editor-selection]]
+  (when-not (:ui/submitting (current))
+    (let [s (current) mode (:ui/query-format s) format (if (= "visual" mode) "edn" mode)
+          content (or editor-content (if (= "edn" format) (:ui/query-edn s) (:ui/query-sql s)))
+          selection (if editor-selection (js->clj editor-selection :keywordize-keys true) (:ui/query-selection s))]
+      (when-not (= "visual" mode) (editor/focusQueryEditor))
+      (try
+        (let [input (js->clj (editor/executionInput content (clj->js selection) format (boolean all?)) :keywordize-keys true)]
+          (when (or (empty? (:statements input)) (str/blank? (:content input)))
+            (throw (js/Error. "Write or select a query to run.")))
+          (submit! "query" (merge input {:editor_content content :selection selection
+                                         :format format :editor_mode mode :dialect (:ui/dialect s) :parameters (query-parameters s)})))
+        (catch :default e (report-error! e))))))
+
+(defn load-catalog! []
+  (let [id (project-id) target (:ui/target (current))]
+    (when id
+      (-> (request! "GET" (str (api-path "/catalog?target=") (js/encodeURIComponent target)))
+        (.then #(when (and (= id (project-id)) (= target (:ui/target (current)))) (patch! {:ui/catalog (:relations %)})))
+        (.catch (fn [_] (when (= id (project-id)) (patch! {:ui/catalog []}))))))))
+(defn pretty-edn [query] (with-out-str (pprint/pprint query)))
+(defn read-visual-query [content]
+  (let [query (reader/read-string content)]
+    (when-not (builder/supported? query)
+      (throw (js/Error. "This query uses expressions outside the visual builder. Keep editing SQL or EDN; the draft is preserved.")))
+    query))
+(defn save-format-options! [options]
+  (patch! {:ui/format-options options})
+  (js/localStorage.setItem "workbench.sql-format-options" (js/JSON.stringify (clj->js options))))
+(defn format-query! []
+  (let [s (current) sql? (= "sql" (:ui/query-format s))]
     (try
-      (let [parameters (js->clj (js/JSON.parse (if (str/blank? input) "{}" input)) :keywordize-keys true)]
-        (when-not (map? parameters) (throw (js/Error. "Parameters must be a JSON object.")))
-        (submit! "query" {:content (if (= "edn" (:ui/query-format s)) (:ui/query-edn s) (:ui/query-sql s))
-                          :format (:ui/query-format s) :dialect (:ui/dialect s) :parameters parameters}))
-      (catch :default e (report-error! e)))))
+      (patch! {(if sql? :ui/query-sql :ui/query-edn) (if sql? (editor/formatSql (:ui/query-sql s) (clj->js (:ui/format-options s))) (pretty-edn (reader/read-string (:ui/query-edn s))))
+               :ui/query-selection {:from 0 :to 0 :head 0} :ui/conversion-note "Formatted with your preferences." :ui/error nil})
+      (catch :default error (report-error! error)))))
+(defn convert-query! [mode]
+  (let [s (current) id (project-id) source-mode (:ui/query-format s)
+        source-format (if (= "visual" source-mode) "edn" source-mode)
+        target-format (if (= "visual" mode) "edn" mode)
+        key (if (= "edn" source-format) :ui/query-edn :ui/query-sql) content (get s key)
+        apply-conversion (fn [converted]
+                           (let [text (:content converted) visual (when (= "visual" mode) (read-visual-query text))
+                                 text (if (= "sql" mode) (editor/formatSql text (clj->js (:ui/format-options (current)))) text)]
+                             (patch! {(if (= "edn" target-format) :ui/query-edn :ui/query-sql) text
+                                      (if (= "edn" target-format) :ui/parameters :ui/sql-parameters) (json-display (or (:parameters converted) (query-parameters s)))
+                                      :ui/query-format mode :ui/visual-query visual :ui/query-selection {:from 0 :to 0 :head 0}
+                                      :ui/conversion-note (:note converted) :ui/converting false :ui/error nil})
+                             (when visual (load-catalog!))))]
+    (when (and (not= mode source-mode) (not (:ui/converting s)))
+      (try
+        (patch! {:ui/converting true :ui/error nil})
+        (if (= source-format target-format)
+          (apply-conversion {:content content :parameters (query-parameters s)})
+          (-> (request! "POST" (api-path "/query/convert") {:content content :format source-format :parameters (query-parameters s) :target (:ui/target s) :dialect (:ui/dialect s)})
+            (.then (fn [converted]
+                     (when (= id (project-id))
+                       (if (and (= content (get (current) key)) (= source-mode (:ui/query-format (current))))
+                         (apply-conversion converted)
+                         (patch! {:ui/converting false :ui/conversion-note "Draft changed. Switch mode again to convert it."})))))
+            (.catch (fn [error] (when (= id (project-id)) (patch! {:ui/converting false}) (report-error! error))))))
+        (catch :default error (patch! {:ui/converting false}) (report-error! error))))))
+
+(defn load-query! [job & [rerun?]]
+  (let [options (:options job) format (:format options) mode (:editor_mode options format)]
+    (patch! {:ui/editor-revision (inc (:ui/editor-revision (current))) :ui/tab "query" :ui/query-format mode :ui/visual-query (when (= "visual" mode) (read-visual-query (:content options)))
+             (if (= "edn" format) :ui/query-edn :ui/query-sql) (or (:editor_content options) (:content options))
+             (if (= "edn" format) :ui/parameters :ui/sql-parameters) (json-display (:parameters options))
+             :ui/target (:target options) :ui/dialect (:dialect options)
+             :ui/query-selection (or (:selection options) {:from 0 :to 0 :head 0})
+             :ui/conversion-note nil :ui/error nil})
+    (when rerun? (submit! "query" options))))
+
+(defn build-options [s]
+  (case (:ui/build-scope s)
+    "selected" {:select (:ui/model-id s)}
+    "baseline" {:defer false :favor_state false}
+    {}))
+
+(defn build-project! []
+  (let [s (current)]
+    (submit! (if (= "baseline" (:ui/build-scope s)) "baseline" "build") (build-options s))))
 (defn run-preview! []
   (let [s (current)]
     (submit! "preview" {:model_id (:ui/model-id s) :dialect (:ui/dialect s) :baseline (:ui/baseline-input s)})))
 (defn run-compare! []
   (let [s (current)]
     (submit! "compare" {:left_result_id (:ui/left-result s) :right_result_id (:ui/right-result s)
-                        :key_columns (into [] (remove str/blank?) (map str/trim (str/split (:ui/compare-keys s) #",")))})))
+                        :key_columns (into [] (remove str/blank?) (map str/trim (.split (:ui/compare-keys s) ",")))})))
 (defn import-baseline! []
   (let [s (current)]
     (patch! {:ui/submitting true :ui/error nil})
@@ -207,7 +303,7 @@
                      (when (and (= "succeeded" (:status job)) (:result_id job)
                                 (not (contains? @presented-results (:result_id job))))
                        (swap! presented-results conj (:result_id job))
-                       (load-result! (:result_id job)))))))
+                       (load-result! (:result_id job) 0 (= "query" (:kind job))))))))
         (.catch report-error!)
         (.finally #(reset! polling? false)))
       (when selected
@@ -226,7 +322,8 @@
   (dom/span #js {:className (str "icon icon-" name) :aria-hidden true}
     (case name "play" "▷" "file" "≡" "model" "◇" "check" "✓" "arrow" "↗" "folder" "▱" "clock" "◷" "close" "×" "plus" "+" "command" "⌘" "compare" "⇄" "dot" "●" "·")))
 (defn button [label action & [class disabled]]
-  (dom/button #js {:className (str "button " class) :onClick (fn [_] (action)) :disabled (boolean disabled)} label))
+  (dom/button #js {:className (str "button " class) :onClick (fn [_] (action))
+                   :onMouseDown (fn [event] (when (#{"Run statement" "Run all" "Run query"} label) (.preventDefault event))) :disabled (boolean disabled)} label))
 (defn pill [label & [class]] (dom/span #js {:className (str "pill " class)} label))
 (defn field-label [label child] (dom/label #js {:className "field"} (dom/span #js {:className "field-label"} label) child))
 (defn checkbox [label key checked]
@@ -246,14 +343,16 @@
       (when materialized (dom/span #js {:className "model-kind"} materialized)))))
 (def model-row (comp/factory ModelRow {:keyfn :model/id}))
 
-(defsc JobRow [this {:job/keys [id] :keys [kind status created_at result_id]}]
+(defsc JobRow [this {:job/keys [id] :keys [kind status created_at started_at finished_at result_id options]}]
   {:query [:job/id :kind :status :created_at :started_at :finished_at :summary :error :result_id :options]
    :ident :job/id}
   (dom/button #js {:className (str "job-row " (when (:active (comp/get-computed this)) "active"))
-                   :onClick #(do (select-job! id) (when result_id (load-result! result_id)))}
+                   :onClick #(do (select-job! id) (when result_id (load-result! result_id 0 (= "query" (:ui/tab (current))))))}
     (dom/span #js {:className (str "status-dot " status)})
     (dom/span #js {:className "job-copy"} (dom/strong {} (str/capitalize (or kind "job")))
-      (dom/span {} (str status " · " (date-label created_at))))
+      (dom/span {} (str status " · " (date-label created_at)
+                       (when (and started_at finished_at) (str " · " (.round js/Math (- (.getTime (js/Date. finished_at)) (.getTime (js/Date. started_at)))) " ms"))))
+      (when (= "query" kind) (dom/code #js {:className "query-snippet"} (subs (or (:content options) "") 0 (min 90 (count (or (:content options) "")))))))
     (when result_id (icon "arrow"))))
 (def job-row (comp/factory JobRow {:keyfn :job/id}))
 
@@ -284,9 +383,15 @@
   (dom/aside #js {:className "sidebar"}
     (dom/div #js {:className "sidebar-heading"} (dom/span {} "PROJECT EXPLORER")
       (dom/button #js {:className "icon-button" :title "Refresh project" :onClick refresh-project! :aria-label "Refresh project"} "↻"))
+    (dom/div #js {:className "sidebar-project"}
+      (dom/strong {} (get-in props [:ui/project :name]))
+      (dom/span {} "Local analytics project"))
+    (dom/input #js {:className "model-search" :aria-label "Search models" :placeholder "Search models…"
+                    :value (:ui/model-search props) :onChange #(value! :ui/model-search %)})
     (dom/div #js {:className "sidebar-section-title"} "Models" (pill (count (:ui/models props))))
     (dom/div #js {:className "model-list"}
-      (if (seq (:ui/models props)) (map #(model-row (comp/computed % {:active (= (:unique_id %) (:ui/model-id props))})) (:ui/models props))
+      (if (seq (:ui/models props)) (map #(model-row (comp/computed % {:active (= (:unique_id %) (:ui/model-id props))}))
+              (filter #(str/includes? (str/lower-case (:name %)) (str/lower-case (:ui/model-search props))) (:ui/models props)))
         (dom/p #js {:className "sidebar-hint"} "Parse the project to discover models.")))
     (dom/details #js {:className "files-list"}
       (dom/summary {} "Project files" (pill (count (:ui/files props))))
@@ -300,7 +405,7 @@
 (defn dialect-control [props]
   (dom/select #js {:value (:ui/dialect props) :aria-label "Execution dialect" :onChange #(value! :ui/dialect %)}
     (dom/option #js {:value "duckdb"} "DuckDB · native")
-    (dom/option #js {:value "sqlite"} "SQLite · translated")))
+    (dom/option #js {:value "sqlite"} "SQLite · preview")))
 (defn model-editor [props]
   (let [file (:ui/file props) dirty (not= (:ui/content props) (:ui/saved-content props))
         model (first (filter #(= (:unique_id %) (:ui/model-id props)) (:ui/models props)))]
@@ -353,28 +458,85 @@
             (dom/input #js {:aria-label "Reference target" :value (:ui/reference-target props) :placeholder "prod" :onChange #(value! :ui/reference-target %)}))
           (button "Import state" import-baseline! "small" (or (str/blank? (:ui/artifact-dir props)) (:ui/submitting props))))))))
 
+(declare results-panel)
+(defn query-status-bar [props]
+  (let [jobs (filter #(= "query" (:kind %)) (:ui/jobs props))
+        job (if (:ui/query-job props) (first (filter #(= (:ui/query-job props) (:job/id %)) jobs)) (first jobs))
+        status (:status job) active? (#{"queued" "running" "cancelling"} status)
+        duration (when (:started_at job)
+                   (- (.getTime (js/Date. (or (:finished_at job) (.now js/Date)))) (.getTime (js/Date. (:started_at job)))))
+        summary (:summary job)
+        message (cond
+                  (:ui/converting props) "Parsing and converting…"
+                  (:ui/query-requesting props) "Submitting query…"
+                  (:ui/error props) (:ui/error props)
+                  (or (= status "queued") (and (:ui/query-job props) (nil? job))) "Queued · waiting for the project"
+                  (= status "running") (str "Running" (when (:statement_index summary) (str " · statement " (:statement_index summary) " of " (:statement_count summary))))
+                  (= status "cancelling") "Cancelling…"
+                  (= status "succeeded") (str "Completed · " (reduce + 0 (map :row_count (:statement_results summary))) " rows · " (:statement_count summary 1) " statement(s)")
+                  (= status "failed") (str "Failed · " (:error job))
+                  (= status "cancelled") "Cancelled"
+                  (= status "interrupted") "Interrupted · load the query to rerun"
+                  :else "Ready · select text or place the cursor in a statement")]
+    (dom/div #js {:className (str "query-status-bar " status) :role "status" :aria-label "Query status" :aria-live "polite"}
+      (dom/div #js {:className "query-status-message"}
+        (dom/span #js {:className (str "status-dot " (if active? "running" status))})
+        (dom/span #js {:title message} message))
+      (dom/div #js {:className "query-status-controls"}
+        (when duration (dom/span {} (str (.toFixed (/ duration 1000) 1) " s")))
+        (dom/span {} (str (str/upper-case (:ui/query-format props)) " · " (:ui/target props)))
+        (when active? (button "Cancel query" #(cancel-job! (:job/id job)) "small danger" (= "cancelling" status)))))))
+
+(defn format-preferences [props]
+  (let [options (:ui/format-options props)
+        control (fn [title key choices]
+                  (field-label title (dom/select #js {:aria-label title :value (str (get options key))
+                                                     :onChange #(let [value (.. % -target -value)]
+                                                                  (save-format-options! (assoc (:ui/format-options (current)) key (cond (#{:tabWidth :expressionWidth :linesBetweenQueries} key) (js/Number value) (= key :useTabs) (= value "true") :else value))))}
+                                       (map (fn [[value label]] (dom/option #js {:key (str value) :value (str value)} label)) choices))))]
+    (dom/details #js {:className "format-preferences"}
+      (dom/summary {} "Style")
+      (dom/div #js {:className "format-preferences-menu"}
+        (dom/h3 {} "SQL formatting")
+        (control "Keyword case" :keywordCase [["upper" "UPPERCASE"] ["lower" "lowercase"] ["preserve" "Keep typed case"]])
+        (control "Indent with" :useTabs [[false "Spaces"] [true "Tabs"]])
+        (control "Indent width" :tabWidth [[2 "2"] [4 "4"] [8 "8"]])
+        (control "Clause layout" :indentStyle [["standard" "Standard line breaks"] ["tabularLeft" "Aligned to the left"] ["tabularRight" "Aligned to the right"]])
+        (control "Expression width" :expressionWidth [[0 "Always break expressions"] [40 "40 characters"] [50 "50 characters"] [80 "80 characters"] [120 "120 characters"]])
+        (control "Logical operator breaks" :logicalOperatorNewline [["before" "Before AND / OR"] ["after" "After AND / OR"]])
+        (control "Blank lines between queries" :linesBetweenQueries [[1 "1"] [2 "2"] [3 "3"]])
+        (dom/p #js {:className "hint"} "Preferences are saved in this browser. Format applies them; generated SQL uses them automatically.")))))
+
 (defn query-editor [props]
-  (let [edn? (= "edn" (:ui/query-format props))]
-    (dom/div #js {:className "editor-panel"}
-      (dom/div #js {:className "panel-title"}
-        (dom/div {} (dom/span #js {:className "eyebrow"} "QUERY LAB") (dom/h2 {} "Follow a question."))
-        (pill "READ-ONLY QUERIES"))
-      (dom/p #js {:className "intro"} "Use a structured EDN query or native SQL. Every result keeps its SQL and input provenance.")
+  (let [mode (:ui/query-format props) visual? (= "visual" mode) edn? (not= "sql" mode)]
+    (dom/div #js {:className "query-workspace"}
       (dom/div #js {:className "code-card"}
-        (dom/div #js {:className "code-toolbar"}
+        (dom/div #js {:className "code-toolbar query-toolbar"}
           (dom/div #js {:className "segmented"}
-            (button "EDN" #(patch! {:ui/query-format "edn"}) (when edn? "selected"))
-            (button "SQL" #(patch! {:ui/query-format "sql"}) (when-not edn? "selected")))
-          (dialect-control props))
-        (dom/textarea #js {:className "code-editor query-editor" :aria-label (if edn? "EDN query editor" "SQL query editor") :spellCheck false
-                           :value (if edn? (:ui/query-edn props) (:ui/query-sql props))
-                           :onChange #(value! (if edn? :ui/query-edn :ui/query-sql) %)
-                           :onKeyDown #(when (and (or (.-ctrlKey %) (.-metaKey %)) (= "Enter" (.-key %))) (.preventDefault %) (run-query!))})
+            (button "Visual" #(convert-query! "visual") (when visual? "selected") (:ui/converting props))
+            (button "SQL" #(convert-query! "sql") (when (= "sql" mode) "selected") (:ui/converting props))
+            (button "EDN" #(convert-query! "edn") (when (= "edn" mode) "selected") (:ui/converting props)))
+          (dom/div #js {:className "query-run-actions"}
+            (when-not visual? (button "Format" format-query! "small" (:ui/converting props)))
+            (format-preferences props)
+            (button (if edn? "Run query" "Run statement") #(run-query! false) "primary" (:ui/submitting props))
+            (when-not edn? (button "Run all" #(run-query! true) "small" (:ui/submitting props)))
+            (dom/kbd {} "Shift+Enter / F5")))
+        (if visual?
+          (builder/query-builder (:ui/visual-query props) (:ui/catalog props)
+            #(patch! {:ui/visual-query % :ui/query-edn (pretty-edn %) :ui/error nil :ui/conversion-note nil}))
+          (react/createElement editor/QueryEditor
+          #js {:key (:ui/editor-revision props) :value (if edn? (:ui/query-edn props) (:ui/query-sql props)) :format (:ui/query-format props)
+               :onChange #(patch! {(if edn? :ui/query-edn :ui/query-sql) % :ui/conversion-note nil})
+               :onSelection #(patch! {:ui/query-selection (js->clj % :keywordize-keys true)})
+               :selection (clj->js (:ui/query-selection props)) :onRun (fn [all? content selection] (run-query! all? content selection))}))
+        (query-status-bar props)
         (dom/div #js {:className "query-parameters"}
-          (field-label "Parameters · JSON object"
-            (dom/input #js {:aria-label "Parameters" :className "mono" :value (if edn? (:ui/parameters props) (:ui/sql-parameters props)) :onChange #(value! (if edn? :ui/parameters :ui/sql-parameters) %)}))
-          (button "▷ Run query" run-query! "primary" (:ui/submitting props))))
-      (dom/p #js {:className "hint"} (if edn? "EDN v1 resolves model references through your dbt manifest. ⌘ / Ctrl Enter to run." "SQL runs as a read-only query. SQLite translation covers supported SQL; inspect errors and provenance for limitations.")))))
+          (field-label "Parameters · JSON"
+            (dom/input #js {:aria-label "Parameters" :className "mono" :value (if edn? (:ui/parameters props) (:ui/sql-parameters props))
+                            :onChange #(value! (if edn? :ui/parameters :ui/sql-parameters) %)}))
+          (dialect-control props)))
+      (dom/div #js {:className "query-results"} (results-panel props)))))
 
 (defn result-option [r] (dom/option #js {:key (:id r) :value (:id r)} (str (or (:kind r) "result") " · " (subs (:id r) 0 (min 8 (count (:id r)))) " · " (:row_count r) " rows")))
 (defn comparison [props]
@@ -435,11 +597,11 @@
           (dom/p {} "Preview a model or run a query. Its result will appear here with a record of SQL and input bindings.")))
       (comparison props))))
 
-(defn activity [props]
+(defn job-activity [props]
   (let [selected (first (filter #(= (:job/id %) (:ui/selected-job props)) (:ui/jobs props)))
         active? (#{"queued" "running" "cancelling"} (:status selected))]
     (dom/aside #js {:className "activity"}
-      (dom/div #js {:className "sidebar-heading"} "ACTIVITY" (pill (count (:ui/jobs props))))
+
       (dom/div #js {:className "job-list"}
         (if (seq (:ui/jobs props)) (map #(job-row (comp/computed % {:active (= (:job/id %) (:ui/selected-job props))})) (:ui/jobs props))
           (dom/div #js {:className "activity-empty"} (icon "clock") (dom/p {} "Your runs land here.") (dom/span {} "Build, test, or preview to get started."))))
@@ -447,6 +609,17 @@
         (dom/div #js {:className "job-details"}
           (dom/div #js {:className "log-heading"} (dom/strong {} (str/capitalize (:kind selected)))
             (when active? (button "Cancel" #(cancel-job! (:job/id selected)) "small danger" (= "cancelling" (:status selected)))))
+          (when (= "query" (:kind selected))
+            (dom/div #js {:className "replay-actions"}
+              (button "Load query" #(load-query! selected) "small")
+              (button "Replay" #(load-query! selected true) "small" (:ui/submitting props))))
+          (dom/details #js {:className "job-summary"}
+            (dom/summary {} "Run metadata")
+            (dom/pre {} (json-display (select-keys selected [:created_at :started_at :finished_at :status :options :result_id]))))
+          (when-let [statements (get-in selected [:summary :statement_results])]
+            (dom/div #js {:className "statement-results"}
+              (map (fn [item] (button (str "Result " (:statement_index item) " · " (:row_count item) " rows")
+                                      #(load-result! (:result_id item) 0 (= "query" (:ui/tab props))) "small")) statements)))
           (when (:error selected) (dom/div #js {:className "job-error"} (human-error (:error selected))))
           (when (:summary selected) (dom/details #js {:className "job-summary"} (dom/summary {} "Run summary") (dom/pre {} (json-display (:summary selected)))))
           (dom/div #js {:className "log-view" :role "log" :aria-label "Job logs"}
@@ -456,11 +629,32 @@
                       (dom/span {} (:message %))) (:ui/events props))
               (dom/p #js {:className "muted"} (if active? "Waiting for output…" "No log output.")))))))))
 
+(defn changes-panel [props]
+  (dom/div #js {:className "changes-panel"}
+    (if (seq (:ui/changes props))
+      (map (fn [entry]
+             (dom/details #js {:key (:id entry) :className "change-entry"}
+               (dom/summary {} (dom/strong {} (:path entry)) (dom/span {} (date-label (:saved_at entry))))
+               (dom/p #js {:className "hint"} (str (or (:reason entry) "File saved") ". Load either version as a draft, then save to apply it."))
+               (dom/h4 {} "Before") (dom/pre {} (:before entry))
+               (dom/h4 {} "After") (dom/pre {} (:after entry))
+               (button "Load before" #(load-file! (:path entry) {:content (:before entry)}) "small" (nil? (:before entry)))
+               (button "Load after" #(load-file! (:path entry) {:content (:after entry)}) "small"))) (:ui/changes props))
+      (dom/p #js {:className "sidebar-hint"} "Saved project edits appear here. Query runs stay in Activity."))))
+
+(defn activity [props]
+  (dom/aside #js {:className "history-panel"}
+    (dom/nav #js {:className "history-tabs" :aria-label "History"}
+      (button "Activity" #(patch! {:ui/activity-tab "activity"}) (when (= "activity" (:ui/activity-tab props)) "selected"))
+      (button "Changes" #(patch! {:ui/activity-tab "changes"}) (when (= "changes" (:ui/activity-tab props)) "selected")))
+    (if (= "changes" (:ui/activity-tab props)) (changes-panel props) (job-activity props))))
+
 (defsc Root [_ props]
   {:query [:ui/projects :ui/project :ui/files :ui/results :ui/target :ui/defer :ui/favor-state
            :ui/tab :ui/model-id :ui/file :ui/content :ui/saved-content :ui/selected-job
            :ui/events :ui/event-cursor :ui/result :ui/page :ui/error :ui/notice :ui/submitting
            :ui/open-path :ui/profiles :ui/query-format :ui/query-edn :ui/query-sql :ui/parameters :ui/sql-parameters
+           :ui/catalog :ui/visual-query :ui/format-options :ui/editor-revision :ui/query-job :ui/query-requesting :ui/query-selection :ui/converting :ui/conversion-note :ui/model-search :ui/build-scope :ui/activity-tab :ui/changes
            :ui/dialect :ui/baseline-input :ui/left-result :ui/right-result :ui/compare-keys :ui/conflict :ui/artifact-dir :ui/reference-target
            {:ui/models (comp/get-query ModelRow)} {:ui/jobs (comp/get-query JobRow)}]
    :initial-state (fn [_] initial)}
@@ -474,7 +668,9 @@
           (dom/div #js {:className "project-switch"}
             (dom/span #js {:className "header-divider"} "/")
             (dom/select #js {:aria-label "Project" :value (:id project) :onChange #(load-project! (.. % -target -value))}
-              (map #(dom/option #js {:key (:id %) :value (:id %)} (:name %)) (:ui/projects props)))))
+              (map #(dom/option #js {:key (:id %) :value (:id %)} (:name %)) (:ui/projects props)))
+            (dom/select #js {:aria-label "Target" :value (:ui/target props) :onChange #(value! :ui/target %)}
+              (map #(dom/option #js {:key % :value %} %) (or (seq (:targets project)) ["dev"])))))
         (dom/div #js {:className "header-right"} (dom/span #js {:className "local-light"}) "Local session"))
       (when (:ui/error props)
         (dom/div #js {:className "message error" :role "alert"} (dom/span {} (:ui/error props))
@@ -485,17 +681,23 @@
       (if-not project (welcome props)
         (dom/div #js {:className "project-shell"}
           (dom/div #js {:className "run-toolbar"}
-            (dom/div #js {:className "target-controls"}
-              (dom/span #js {:className "field-label"} "TARGET")
-              (dom/select #js {:aria-label "Target" :value (:ui/target props) :onChange #(value! :ui/target %)}
-                (map #(dom/option #js {:key % :value %} %) (or (seq (:targets project)) ["dev"])))
-              (checkbox "Use baseline refs" :ui/defer (:ui/defer props))
-              (checkbox "Prefer baseline relations" :ui/favor-state (:ui/favor-state props)))
             (dom/div #js {:className "run-actions"}
-              (button "Parse" #(submit! "parse" {}) "small" (:ui/submitting props))
-              (button "Test" #(submit! "test" (cond-> {} selected (assoc :select selected))) "small" (or dirty (:ui/submitting props)))
-              (button (if (:baseline project) "Rebuild baseline" "Build baseline") #(submit! "baseline" {:target (if (some #{"baseline"} (:targets project)) "baseline" (:ui/target props)) :defer false :favor_state false}) "small" (or dirty (:ui/submitting props)))
-              (button (if selected "▷ Build selected" "▷ Build project") #(submit! "build" (cond-> {} selected (assoc :select selected))) "primary small" (or dirty (:ui/submitting props)))))
+              (button "Test" #(submit! "test" (build-options props)) "small" (or dirty (:ui/submitting props)))
+              (button "Build" build-project! "primary small" (or dirty (:ui/submitting props)))
+              (dom/details #js {:className "build-options"}
+                (dom/summary {} "Build options")
+                (dom/div #js {:className "build-options-menu card"}
+                  (field-label "Build scope"
+                    (dom/select #js {:aria-label "Build scope" :value (:ui/build-scope props) :onChange #(value! :ui/build-scope %)}
+                      (dom/option #js {:value "project"} "Entire project")
+                      (dom/option #js {:value "selected" :disabled (not selected)} "Selected model")
+                      (dom/option #js {:value "baseline"} "Save reference baseline")))
+                  (dom/p #js {:className "hint"} "Build creates models and runs tests. Test checks existing models. Both use the selected target.")
+                  (when (:baseline project)
+                    (dom/div {}
+                      (checkbox "Use baseline refs" :ui/defer (:ui/defer props))
+                      (checkbox "Prefer baseline relations" :ui/favor-state (:ui/favor-state props))))
+                  (button "Refresh model graph" #(submit! "parse" {}) "small" (:ui/submitting props))))))
           (dom/div #js {:className "workspace"}
             (sidebar props)
             (dom/main #js {:className "main-pane"}
@@ -511,6 +713,8 @@
 (defn ^:export refresh [] (app/mount! application Root "app"))
 (defn ^:export init []
   (refresh)
+  (try (when-let [saved (js/localStorage.getItem "workbench.sql-format-options")] (patch! {:ui/format-options (merge (:ui/format-options initial) (js->clj (js/JSON.parse saved) :keywordize-keys true))})) (catch :default _ nil))
+  (format-query!)
   (load-projects!)
   (js/window.addEventListener "beforeunload"
     (fn [event] (when (dirty?) (.preventDefault event) (set! (.-returnValue event) ""))))

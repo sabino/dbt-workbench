@@ -1,97 +1,71 @@
 # Architecture
 
-The workbench keeps dbt authoritative for project parsing, Jinja rendering, adapter behavior, and native builds. It adds a local editing interface, durable jobs and results, explicit baseline references, and bounded query previews.
+Clojure owns the API, workspace, job runtime, and query processor.
+ClojureScript/Fulcro and CodeMirror own the browser interface.
+Native dbt 2.0.5 owns project parsing, Jinja compilation, materialization, and tests.
+Python and SQLGlot were removed from the application.
 
 ```mermaid
 flowchart TD
-    UI["Fulcro browser interface"] --> API["Local FastAPI application"]
-    API --> W["Workspace manager"]
-    API --> R["Job runtime"]
-    W --> F["Opened project files and dbt artifacts"]
-    R --> DBT["Installed dbt CLI and adapters"]
-    R --> Q["Query engine"]
-    Q --> G["SQLGlot validation, binding, and SQL generation"]
-    G --> D["DuckDB read-only inputs"]
-    G --> S["SQLite captured-data execution"]
-    R --> STORE["SQLite job metadata and Arrow results"]
+    UI["ClojureScript + CodeMirror"] --> API["Loopback JDK HTTP server"]
+    API --> W["Workspace: files, revisions, changes"]
+    API --> R["Durable project job queues"]
+    R --> DBT["Native dbt CLI"]
+    R --> Q["Parse and validate"]
+    Q --> S["Query-scoped metadata store"]
+    S --> C["HoneySQL compile or native SQL"]
+    C --> D["JDBC: DuckDB or captured SQLite"]
+    R --> P["SQLite metadata + JSON result snapshots"]
 ```
 
-## Workspace and native execution
+## Query processor
 
-Opening a project records its path and profiles directory. It does not copy the project. SQL, YAML, and EDN files can be read and saved within that project; a SHA-256 revision check prevents an older editor buffer from overwriting a concurrent change. Generated directories, dependency directories, profile files, and symbolic links are excluded from editing. Saves and baseline imports are blocked while that project has queued or active jobs. An external editor can still change project files; the workbench does not freeze an entire project revision before running dbt.
+The pipeline separates parsing, query-scoped metadata, compilation, and driver execution.
+It follows Metabase's stage boundaries without copying its implementation or adding a Metabase runtime.
+Metadata comes from explicit project profiles, manifests, and baseline artifact identities.
+There is no mutable global query metadata cache.
 
-The bundled Jaffle Shop demo is different: the workbench makes an application-owned copy and writes a local profile with separate `baseline` and `dev` DuckDB databases. The development profile attaches the baseline database read-only.
+JSqlParser validates native SQL and identifies physical tables, parameters, and unsafe operations.
+Malli validates external requests and structured EDN. HoneySQL lowers structured expressions to bound SQL.
+SQL-to-EDN maps parsed projections, expressions, sources, joins, CTEs, grouping, and ordering into HoneySQL data.
+Unsupported conversion nodes fail with a diagnostic while the browser retains the draft.
+EDN-to-SQL compiles through HoneySQL, emits named parameters, and returns values separately.
+A vector of maps expresses sequential queries. Legacy versioned EDN remains readable for saved job replay.
+Visual controls edit the same HoneySQL map. A read-only information-schema catalog supplies table and column choices.
+SQL tokenization preserves strings and comments while binding named parameters and normalizing parser input.
 
-Native jobs invoke the configured dbt executable without a shell and use separate artifact and log directories per job. Parsing, building, testing, and compiling use the project's own adapter and dbt configuration. The runtime checks both the process exit code and the statuses in `run_results.json` before accepting a build or baseline as successful. Work is serialized per project. A process-level lock prevents two workbench instances from using the same data directory at once.
+DuckDB connections are read-only. SQLite runs bounded copies of referenced DuckDB tables in memory.
+Native division is refused in SQLite because its numeric semantics can differ.
+Structured division defines floating-point, NULL-on-zero behavior for both engines.
+Read-only function validation, row limits, deadlines, and cancellation bound query execution.
 
-`DBT_WORKBENCH_DBT` selects a dbt executable explicitly. Otherwise the runtime looks for dbt in its Python environment or executable path. The bundled adapter is dbt-duckdb. Additional native adapters and project packages belong in the selected dbt environment.
+## Jobs, persistence, and edits
 
-## Baselines and relation resolution
+The runtime serializes jobs within each project and allows independent projects to run concurrently.
+Native dbt uses per-job artifact directories. Successful Build includes dbt tests.
+The demo's first Build also prepares baseline relations. Advanced choices remain under Build options.
+Deferral uses dbt's own state and favor-state flags.
 
-A baseline action runs `dbt build` against the requested target and publishes its successful artifacts into a new immutable baseline directory. Existing artifacts can also be copied in through `POST /api/projects/{id}/baseline/import`, using a local artifact directory and its target name. The importer validates the manifest structure; the caller supplies artifacts from a trusted, successful build. The registry keeps baseline history. This version executes deferral against the latest baseline; selecting an older baseline is not implemented.
+SQLite persists job inputs, events, summaries, and result metadata.
+JSON files preserve captured rows. Comparisons use unordered row multisets and retain duplicate counts.
+Activity records full editor text, execution scope, parameters, targets, artifact hashes, bindings,
+timestamps, limits, errors, and individual statement results.
+Batch execution stops at the first failure and retains completed results.
 
-The baseline represents **dbt state**, not a point-in-time copy of table data. Its manifest and other artifacts do not change after publication. Its referenced database relations can change when that target is built again or updated elsewhere.
+File saves require the latest SHA-256 revision. Saves record immutable before/after versions.
+Loading a version makes an editable draft; Save creates another recorded change.
+Saves and baseline imports wait until that project's queued and active jobs finish.
+Symbolic links, generated directories, profiles, and paths outside the project are excluded.
 
-Native builds use dbt's own `--defer`, `--state`, and optional `--favor-state` behavior. Deferral only helps where the active adapter can access the referenced relations. It does not copy data between databases or grant access. An existing development relation normally takes precedence unless `--favor-state` applies; selected nodes are still built in the selected target.
+Baseline artifact directories preserve successful compilation state, not source database contents.
+External editors and database writers remain outside the workbench's transaction boundaries.
+Existing Python-era job metadata is retained. Legacy Arrow rows need a saved-query rerun.
 
-Query previews maintain their own explicit mapping from dbt model identities to accessible physical relations. This makes the selected inputs visible in result provenance. The workbench resolves physical table references with SQL scope awareness so a common-table-expression name is not mistaken for a database table.
+## Frontend and distribution
 
-There are three distinct kinds of saved state:
-
-| State | What is preserved | What can still change |
-| --- | --- | --- |
-| Baseline artifacts | A successful manifest and build artifacts | Referenced database table contents |
-| Opened project | Its registered path and edited files | Files can be edited outside the workbench |
-| Saved query result | Captured Arrow rows and result metadata | Its source databases can change independently |
-
-A saved result can be inspected or compared later without re-querying its sources. Download serves CSV; Arrow is the internal result format.
-
-## Query execution
-
-A preview of current project code first asks dbt to compile the selected model in its adapter context. A baseline preview reads the saved compiled SQL directly, so editing the current project does not rewrite the baseline query. SQLGlot receives compiled SQL, never raw Jinja. The engine validates the query, binds its physical inputs, and executes supported read-only SQL against local DuckDB inputs. SQLite previews use an actual in-memory SQLite database populated with captured inputs.
-
-SQLGlot supplies parsing, SQL transformation, and generation. Successful generation alone is not considered evidence of equivalent execution. The engine rejects unsupported constructs, uses bounded input capture, and records original SQL, executed SQL, relation bindings, and warnings in provenance.
-
-The first release implements these preview execution paths:
-
-- Local DuckDB profile → DuckDB query execution.
-- Local DuckDB profile → captured tables → SQLite query execution.
-
-Native dbt adapter support is broader than this preview support. A project can use its installed native adapter for dbt jobs without that warehouse becoming a supported interactive preview input.
-
-## EDN query document
-
-The query lab accepts an EDN v1 document as well as SQL. EDN is the authoritative representation for that submitted structured query; it is not a replacement for the project's existing dbt SQL files.
-
-```clojure
-{:query/version 1
- :from {:model "model.jaffle_shop.orders" :as "o"}
- :select [{:as "customer_id" :expr [:field "o" "customer_id"]}
-          {:as "revenue" :expr [:sum [:field "o" "amount"]]}]
- :where [:eq [:field "o" "status"] [:param "status" :text]]
- :group-by [[:field "o" "customer_id"]]
- :order-by [{:expr [:field "o" "customer_id"] :direction :asc}]
- :limit 100}
-```
-
-Parameters are submitted separately, for example `{"status":"completed"}`. Declared parameter types are `:text`, `:integer`, `:float`, `:boolean`, and `:date` (an ISO date string). Missing or extra parameters and conflicting declarations are rejected. A `:binding` of `:baseline` or `:dev` can be supplied in `:from` to choose that relation source explicitly.
-
-Supported expression families include field references and typed parameters; addition, subtraction, multiplication, and division; comparisons; boolean expressions; null checks and coalescing; and sum, count, minimum, maximum, and average aggregates. Projection, filtering, grouping, ordering, and row limits form the relational layer. This is a closed operator vocabulary: arbitrary EDN function calls are not evaluated.
-
-Structured division explicitly means floating-point division with `NULL` when the denominator is zero. Existing raw SQL retains its native meaning on the native engine; risky cross-engine forms such as raw division, casts, date operations, and unknown functions can be rejected. The engine does not silently assign the structured operator's meaning to arbitrary source SQL.
-
-The document format is intentionally independent of the compiler's internal AST. Fulcro edits and submits these documents; SQLGlot performs supported lowering. Metabase, Pathom, Ibis, and SQLMesh are not runtime dependencies of this version.
-
-## Jobs, cancellation, and comparison
-
-Jobs have persistent statuses and ordered log events. The browser polls events using a sequence cursor and loads result pages rather than keeping every result row in application state.
-
-Cancellation requests propagate to the query worker or dbt process group. A running process receives termination, with escalation if necessary. A job becomes cancelled after its worker exits. On application restart, previously active jobs are marked interrupted rather than replayed automatically. Cancelling a dbt job cannot undo database work already committed.
-
-Comparisons use captured results. Without key columns, comparison treats rows as an unordered multiset, preserving duplicate counts. With key columns, each side must have unique keys, and rows are compared by key. Numeric comparison is exact; it does not apply a statistical or floating-point tolerance. The comparison summary reports `equal` for row values and separately reports `schema_equal` for Arrow field names and types. Results marked truncated cannot be compared; rerun narrower queries or raise the row bound first.
-
-## Development boundary
-
-The shipped interface is compiled ClojureScript using Fulcro. FastAPI serves both the static assets and the JSON API. Rebuilding the interface requires Node.js and a JDK; running a built package requires Python and its installed dependencies.
-
-The server is restricted to loopback hosts. It is a single-user local application with access to the project paths and credentials of the process running it. A dbt project can execute macros, hooks, and native database operations; opening and building projects assumes they are trusted by that user.
+Bun installs pinned dependencies and shadow-cljs compiles the UI into `resources/static/js`.
+The compiled assets ship in the repository. Java and Clojure run the application.
+SQL Formatter uses its published browser bundle. Closure optimization alters its raw named-capture templates, so the build copies it unchanged.
+CodeMirror uses Nextjournal's Clojure grammar for EDN highlighting. Formatting preferences persist in browser storage.
+The native dbt installer verifies a pinned release archive with SHA-256.
+`DBT_WORKBENCH_DBT` can select another executable with the project's required platform support.

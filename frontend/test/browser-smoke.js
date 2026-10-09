@@ -1,0 +1,226 @@
+import {chromium} from "playwright";
+import {expect} from "@playwright/test";
+import {mkdtemp, mkdir, writeFile, rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {resolve, join} from "node:path";
+import {createServer} from "node:net";
+
+const projectRoot = resolve(import.meta.dir, "../..");
+const output = resolve(process.env.WORKBENCH_TEST_OUTPUT || "/tmp/workbench-clojure-browser");
+await mkdir(output, {recursive: true});
+const dataDir = await mkdtemp(join(tmpdir(), "workbench-clojure-"));
+const socket = createServer();
+await new Promise(resolve => socket.listen(0, "127.0.0.1", resolve));
+const port = socket.address().port;
+await new Promise(resolve => socket.close(resolve));
+const processHandle = Bun.spawn(["clojure", "-M:run", "--port", String(port), "--data-dir", dataDir], {cwd: projectRoot, stdout: "ignore", stderr: Bun.file(join(output, "server.log"))});
+const base = `http://127.0.0.1:${port}`;
+let browser;
+const evidence = {jobs: [], browser_errors: []};
+try {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try { if ((await fetch(base + "/api/health")).ok) break; } catch {}
+    await Bun.sleep(100);
+    if (attempt === 199) throw new Error("Clojure server failed to start");
+  }
+  browser = await chromium.launch({headless: true});
+  const page = await browser.newPage({viewport: {width: 1536, height: 1024}});
+  page.on("pageerror", error => evidence.browser_errors.push(String(error)));
+  await page.goto(base);
+  await page.getByRole("button", {name: "Create Jaffle demo", exact: false}).click();
+  await expect(page.getByLabel("Target", {exact: true})).toBeVisible();
+
+  async function job(action, success = true) {
+    const responsePromise = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/jobs"));
+    await action();
+    const response = await responsePromise;
+    expect(response.status(), await response.text()).toBe(202);
+    let record = await response.json();
+    for (let attempt = 0; attempt < 1200; attempt += 1) {
+      record = await (await page.request.get(`${base}/api/jobs/${record.id}`)).json();
+      if (["succeeded", "failed", "cancelled", "interrupted"].includes(record.status)) break;
+      await page.waitForTimeout(100);
+    }
+    evidence.jobs.push(record);
+    expect(record.status, JSON.stringify(record)).toBe(success ? "succeeded" : "failed");
+    await expect(page.locator(".job-row.active")).toContainText(record.status, {timeout: 10000});
+    if (record.result_id) await expect(page.getByLabel("Saved result")).toHaveValue(record.result_id, {timeout: 10000});
+    return record;
+  }
+
+  const build = await job(() => page.getByRole("button", {name: "Build", exact: true}).click());
+  expect(build.summary.run_results.results).toHaveLength(28);
+  await job(() => page.getByRole("button", {name: "Test", exact: true}).click());
+  await page.getByRole("button", {name: "Query lab", exact: true}).click();
+  const editor = page.getByRole("textbox", {name: "Query editor", exact: true});
+  const sql = "SELECT customer_id, SUM(amount) AS revenue\nFROM orders\nGROUP BY customer_id\nORDER BY customer_id;\n\nSELECT COUNT(*) AS count FROM customers;";
+  await editor.fill(sql);
+  await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
+  const native = await job(() => editor.press("Shift+Enter"));
+  await expect(editor).toBeFocused();
+  expect(native.options.execution_scope).toBe("statement");
+  expect(native.options.content).toContain("SUM(amount)");
+  expect(native.options.content).not.toContain("COUNT(*)");
+  await expect(page.locator(".cm-gutters")).toBeVisible();
+  await expect(page.locator(".active-statement")).not.toHaveCount(0);
+  await expect(page.locator(".cm-content span")).not.toHaveCount(0);
+
+  await editor.locator(".cm-line").last().click({position: {x: 10, y: 8}});
+  const cursor = await job(() => editor.press("F5"));
+  await expect(editor).toBeFocused();
+  expect(cursor.options.content.trim()).toBe("SELECT COUNT(*) AS count FROM customers");
+  await expect(page.locator(".result-grid tbody td").last()).toHaveText("100");
+  // Select the first statement through the DOM selection, then execute it.
+  await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
+
+  await editor.fill("SELECT 41 AS value;\nSELECT 42 AS value;");
+  await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
+  await editor.press("Home");
+  await editor.press("Shift+End");
+  const selection = await job(() => editor.press("Shift+Enter"));
+  expect(selection.options.execution_scope).toBe("selection");
+  await expect(editor).toBeFocused();
+  await expect(page.locator(".result-grid tbody td").last()).toHaveText("41");
+
+  await editor.fill(sql);
+  await page.getByRole("button", {name: "Format", exact: true}).click();
+  const all = await job(() => page.getByRole("button", {name: "Run all", exact: true}).click());
+  await expect(editor).toBeFocused();
+  expect(all.summary.statement_results).toHaveLength(2);
+  await page.getByRole("button", {name: "Result 1 ·", exact: false}).click();
+  await expect(page.getByLabel("Saved result")).toHaveValue(all.summary.statement_results[0].result_id);
+  await page.screenshot({path: join(output, "query-lab.png"), fullPage: true});
+
+  await page.getByRole("button", {name: "EDN", exact: true}).click();
+  await expect(editor).toContainText(":select");
+  await expect(editor).toContainText(":from");
+  await expect(editor).not.toContainText(":sql");
+  const edn = await job(() => page.getByRole("button", {name: "Run query", exact: true}).click());
+  expect(edn.summary.statement_results).toHaveLength(2);
+  await page.screenshot({path: join(output, "query-edn.png"), fullPage: true});
+  await page.getByRole("button", {name: "SQL", exact: true}).click();
+  await expect(page.getByRole("button", {name: "Run statement", exact: true})).toBeVisible();
+  await expect(editor).toHaveAttribute("data-language", "sql");
+  await expect(editor).toContainText("COUNT(*)");
+  await editor.fill("select customer_id,sum(amount) as revenue from orders group by customer_id order by customer_id");
+  await page.locator(".format-preferences summary").click();
+  await page.getByLabel("Keyword case", {exact: true}).selectOption("lower");
+  await page.getByLabel("Indent with", {exact: true}).selectOption("true");
+  await page.getByRole("button", {name: "Format", exact: true}).click();
+  await expect(editor).toContainText("select");
+  await expect(editor.locator(".cm-line")).not.toHaveCount(1);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("workbench.sql-format-options")))).toMatchObject({keywordCase: "lower", useTabs: true});
+  await page.getByLabel("Keyword case", {exact: true}).selectOption("upper");
+  await page.getByLabel("Indent with", {exact: true}).selectOption("false");
+  await page.locator(".format-preferences summary").click();
+  await page.getByRole("button", {name: "Visual", exact: true}).click();
+  await expect(page.getByLabel("Visual query builder", {exact: true})).toBeVisible();
+  await expect(page.getByLabel("Source table", {exact: true})).toHaveValue("orders");
+  await page.getByRole("button", {name: "+ Filter", exact: true}).click();
+  await page.getByLabel("Filter 1 field", {exact: true}).selectOption("orders.customer_id");
+  await page.getByLabel("Filter 1 operator", {exact: true}).selectOption(">");
+  await page.getByLabel("Filter 1 value type", {exact: true}).selectOption("number");
+  await page.getByLabel("Filter 1 value", {exact: true}).fill("20");
+  await page.getByLabel("Visual row limit", {exact: true}).fill("5");
+  const visual = await job(() => page.getByRole("button", {name: "Run query", exact: true}).click());
+  expect(visual.options.editor_mode).toBe("visual");
+  expect(visual.options.content).toContain(":where [:> :orders.customer_id 20]");
+  expect(visual.summary.row_count).toBe(5);
+  await expect(page.locator(".message.notice")).toHaveCount(0);
+  await page.getByLabel("Visual query builder", {exact: true}).evaluate(element => { element.scrollTop = 0; });
+  await page.screenshot({path: join(output, "query-visual.png"), fullPage: true});
+  await page.getByRole("button", {name: "+ Join", exact: true}).click();
+  await page.getByLabel("Join 1 table", {exact: true}).selectOption("customers");
+  await page.getByLabel("Join 1 left field", {exact: true}).selectOption("orders.customer_id");
+  await page.getByLabel("Join 1 right field", {exact: true}).selectOption("j1.customer_id");
+  const joined = await job(() => page.getByRole("button", {name: "Run query", exact: true}).click());
+  expect(joined.summary.row_count).toBe(5);
+  expect(joined.options.content).toContain(":join-by");
+  await page.getByRole("button", {name: "EDN", exact: true}).click();
+  await expect(editor).toContainText(":where");
+  await page.getByRole("button", {name: "SQL", exact: true}).click();
+  await expect(editor).toHaveAttribute("data-language", "sql");
+  await expect(editor).toContainText("LIMIT");
+  await editor.fill("SELECT customer_id FROM orders WHERE status=:status ORDER BY customer_id LIMIT 3");
+  await page.getByLabel("Parameters", {exact: true}).fill('{"status":"completed"}');
+  await page.getByRole("button", {name: "EDN", exact: true}).click();
+  await expect(editor).toContainText(":param");
+  await page.getByRole("button", {name: "SQL", exact: true}).click();
+  await expect(editor).toHaveAttribute("data-language", "sql");
+  await expect(editor).toContainText(":p0");
+  await job(() => page.getByRole("button", {name: "Run all", exact: true}).click());
+  await page.getByLabel("Parameters", {exact: true}).fill("{}");
+  await editor.fill("SELECT FROM");
+  await page.getByRole("button", {name: "EDN", exact: true}).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(editor).toContainText("SELECT FROM");
+  await page.getByRole("button", {name: "Dismiss error"}).click();
+  await editor.fill("SELECT customer_id, SUM(amount) AS revenue FROM orders GROUP BY customer_id ORDER BY customer_id");
+  await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
+  await page.getByLabel("Execution dialect").selectOption("sqlite");
+  const sqlite = await job(() => editor.press("F5"));
+  const comparison = await (await page.request.post(`${base}/api/projects/demo-jaffle-shop/jobs`, {data: {kind: "compare", options: {left_result_id: native.result_id, right_result_id: sqlite.result_id}}})).json();
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const record = await (await page.request.get(`${base}/api/jobs/${comparison.id}`)).json();
+    if (record.status === "succeeded") { expect(record.summary.equal).toBe(true); break; }
+    if (record.status === "failed") throw new Error(JSON.stringify(record));
+    await page.waitForTimeout(100);
+  }
+
+  await page.getByRole("button", {name: "Load query", exact: true}).click();
+  await expect(editor).toContainText(sqlite.options.editor_content);
+  const replay = await job(() => page.getByRole("button", {name: "Replay", exact: true}).click());
+  expect(replay.options.content).toBe(sqlite.options.content);
+  expect(replay.options.dialect).toBe("sqlite");
+
+  await page.locator(".model-row[title='models/orders.sql']").click();
+  const modelEditor = page.getByLabel("Model file editor");
+  const before = await modelEditor.inputValue();
+  await modelEditor.fill(before + "\n-- Browser history verification\n");
+  await page.getByRole("button", {name: "Save file", exact: true}).click();
+  await expect(page.getByText("File saved to your project.", {exact:true})).toBeVisible();
+  await page.getByRole("button", {name: "Changes", exact: true}).click();
+  await expect(page.locator(".change-entry")).toHaveCount(1);
+  await page.locator(".change-entry summary").click();
+  await page.getByRole("button", {name: "Load before", exact: true}).click();
+  await expect(modelEditor).toHaveValue(before);
+  await expect(page.getByText("Unsaved", {exact: true})).toBeVisible();
+  await page.getByRole("button", {name: "Save file", exact: true}).click();
+  await expect(page.locator(".change-entry")).toHaveCount(2);
+  await page.screenshot({path: join(output, "changes.png"), fullPage: true});
+
+  await page.getByRole("button", {name: "Activity", exact: true}).click();
+  await page.getByRole("button", {name: "Query lab", exact: true}).click();
+  await page.getByLabel("Execution dialect").selectOption("duckdb");
+  await editor.fill("SELECT 1 AS value; SELECT missing FROM orders; SELECT 3 AS value;");
+  const failed = await job(() => page.getByRole("button", {name: "Run all", exact: true}).click(), false);
+  expect(failed.summary.statement_results).toHaveLength(1);
+  expect(failed.summary.statement_index).toBe(2);
+  await editor.fill("WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM t WHERE n < 1000000000) SELECT SUM(n) FROM t");
+  const longPromise = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/jobs"));
+  await editor.press("F5");
+  const longJob = await (await longPromise).json();
+  await expect(page.getByRole("status", {name: "Query status"})).toContainText(/Running|Queued/);
+  await page.getByRole("button", {name: "Cancel query", exact: true}).click({timeout: 10000});
+  await expect.poll(async () => (await (await page.request.get(`${base}/api/jobs/${longJob.id}`)).json()).status).toBe("cancelled");
+  await editor.fill("SELECT 42 AS value");
+  await job(() => editor.press("Shift+Enter"));
+  await expect(page.locator(".result-grid tbody td").last()).toHaveText("42");
+  await expect(editor).toBeFocused();
+  await page.reload();
+  await page.getByRole("button", {name: "Create Jaffle demo", exact: false}).click();
+  await expect(page.locator(".job-row")).not.toHaveCount(0);
+  await page.getByRole("button", {name: "Changes", exact: true}).click();
+  await expect(page.locator(".change-entry")).toHaveCount(2);
+  expect(evidence.browser_errors).toEqual([]);
+  await writeFile(join(output, "evidence.json"), JSON.stringify(evidence, null, 2));
+  console.log(JSON.stringify({jobs: evidence.jobs.length, browser_errors: evidence.browser_errors, output}));
+} catch (error) {
+  await writeFile(join(output, "failure.json"), JSON.stringify(evidence, null, 2));
+  throw error;
+} finally {
+  await browser?.close();
+  processHandle.kill("SIGTERM");
+  await processHandle.exited;
+  await rm(dataDir, {recursive: true, force: true});
+}

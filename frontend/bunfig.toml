@@ -1,0 +1,4 @@
+[install]
+ignoreScripts = true
+auto = "disable"
+minimumReleaseAge = 604800
