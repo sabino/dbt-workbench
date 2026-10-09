@@ -92,7 +92,7 @@ Activity retains executed statements, draft text, scope, parameters, targets, ti
 
 **Open local project** accepts a directory containing `dbt_project.yml` and an optional profiles directory.
 Files are edited in place. Revision checks prevent conflicting saves.
-Multiple file tabs in the right pane retain drafts. Changes stores before/after text; loading a version creates a draft.
+File tabs in Query lab retain drafts. Changes stores before/after text; loading a version creates a draft.
 
 Documentation reads real manifest and catalog artifacts. Source freshness appears only when `sources.json` contains a result.
 Overview shows resource counts, recent jobs, recorded failed tests, local source changes, and selected-model dependency impact.
