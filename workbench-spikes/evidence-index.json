@@ -1,0 +1,331 @@
+{
+  "created_utc": "2026-10-09",
+  "reference_project": {
+    "url": "https://github.com/dbt-labs/jaffle-shop-classic",
+    "commit": "fd7bfacae4f497ff044a6a0275268676bf1b64c3"
+  },
+  "purpose": "Executable feasibility probes and evidence supporting the proposed implementation plan; not a completed application.",
+  "native_engines_executed": [
+    "PostgreSQL 16.15",
+    "DuckDB 1.5.6",
+    "SQLite 3.53.1"
+  ],
+  "remote_warehouse_execution": false,
+  "operating_system_tested": "Linux",
+  "recommended_core": [
+    "Fulcro static UI",
+    "Python supervisor",
+    "installed native dbt CLI",
+    "versioned EDN query document",
+    "SQLGlot",
+    "typed Arrow/Parquet snapshots",
+    "SQLite job/event metadata"
+  ],
+  "optional_paths": [
+    "Metabase full compiler worker",
+    "SQLMesh validated preview planner",
+    "Ibis typed compiler",
+    "Quack local server",
+    "source-semantic UDF compatibility islands"
+  ],
+  "known_negative_findings": [
+    "SQLGlot strict and typed translation can change division/cast semantics",
+    "Metabase bare driver compilation bypasses necessary preprocessing",
+    "SQLMesh dbt append strategy import can change results",
+    "tested dbt OSS experimental local-unit invocation reported node error with process exit zero",
+    "Quack client termination did not cancel server query",
+    "DuckDB cross-process readers cannot open active writer file"
+  ],
+  "files": [
+    {
+      "path": "dbt/boundary_notes.json",
+      "bytes": 4178,
+      "sha256": "b1b0277d513aaca7e3772b5f89938696d88f905e0287b3307c96fd4fc57236ef"
+    },
+    {
+      "path": "dbt/probe.py",
+      "bytes": 10760,
+      "sha256": "2ba77ab979a9d1db0373970fce395e088293201e1ff8841652f7189d29a8b292"
+    },
+    {
+      "path": "dbt/probe_v2.py",
+      "bytes": 4800,
+      "sha256": "dcde1dc9a13fbbb7a6f8799448f1e82ef17ae405e9abf6cf0ecfd8f247d64e78"
+    },
+    {
+      "path": "dbt/results.json",
+      "bytes": 17895,
+      "sha256": "67f217d61a11bec6df98d031c0b4761e67fb5c9c9920406409052ea12b6ab046"
+    },
+    {
+      "path": "dbt/results_v2.json",
+      "bytes": 11916,
+      "sha256": "b6109de34df30e31c0f07b0a7ed91facfd3caa9ad26e25fb85f32da337b53e00"
+    },
+    {
+      "path": "delivery/delivery-review.md",
+      "bytes": 9910,
+      "sha256": "cdbe3b4e3e5ae8d5103a28af08b0b39bf0e32a7f65089e9147c885a5001b1155"
+    },
+    {
+      "path": "delivery/interrupt_probe.py",
+      "bytes": 1177,
+      "sha256": "0baa8ff7092536dd7f64fd76fb073a39535b23432cd459e3ec473ec0533f92eb"
+    },
+    {
+      "path": "delivery/interrupt_results.json",
+      "bytes": 183,
+      "sha256": "776b45da0f0de99158fee3408052d84acaa2626ac5f7325ae93952d5fc0e6529"
+    },
+    {
+      "path": "delivery/probe.py",
+      "bytes": 9723,
+      "sha256": "507660c297ad60281ed898df425ae90284ad3267af6d2dfe7f7c49949ab1135f"
+    },
+    {
+      "path": "delivery/quack_cancel_probe.py",
+      "bytes": 1947,
+      "sha256": "dff4a65fcd31e024d8eb3be8771248d1fea2f69d8e6a28b609ceed003661abfd"
+    },
+    {
+      "path": "delivery/quack_cancel_results.json",
+      "bytes": 713,
+      "sha256": "83f3ad1c6fa18b2dd25f7552f3b6fcf612659e3ea3b1c2faf544f5537979c4a2"
+    },
+    {
+      "path": "delivery/quack_probe.py",
+      "bytes": 2530,
+      "sha256": "cf3c40e8deab891e9d8ea3b21c3450dfd9d12566527eac5a78bfe4fa2379ee83"
+    },
+    {
+      "path": "delivery/quack_results.json",
+      "bytes": 626,
+      "sha256": "ab367e611c54749c706406d949c3490959d4395d725d808fc6f5340e8655d700"
+    },
+    {
+      "path": "delivery/results.json",
+      "bytes": 1959,
+      "sha256": "27fb610b3524d42845f00b4cf86a3cfde593f27417fea318b74a7932fc1aff6a"
+    },
+    {
+      "path": "delivery/stream_probe.py",
+      "bytes": 1437,
+      "sha256": "0de9ea933803b57d5392096faaef46f423b39c79dfd4768404f224eb5f4940cd"
+    },
+    {
+      "path": "delivery/stream_results.json",
+      "bytes": 330,
+      "sha256": "646f92aa3f805e57531a769a66526aea57134bba884b5cf7e546c17ff68c4e77"
+    },
+    {
+      "path": "metabase/README.md",
+      "bytes": 4299,
+      "sha256": "896bfc0cdd311fb51d79479d5af7c5a54f3455dd8535c56d80c716bbb90fff03"
+    },
+    {
+      "path": "metabase/bootstrap.json",
+      "bytes": 76,
+      "sha256": "ea43d0ccaee7234849a07feae276e6af6f669799bca5a22a41c9442625bc53fc"
+    },
+    {
+      "path": "metabase/bootstrap_no_appdb.clj",
+      "bytes": 1212,
+      "sha256": "1e006de50fe5789814af33a8b3761de9b02946e57f836017862a6bf54da0635a"
+    },
+    {
+      "path": "metabase/compiler_spike.clj",
+      "bytes": 6101,
+      "sha256": "6fa254adb9334c28d250176d59baa0d7832e9a7896cbf893feee75bd1b738189"
+    },
+    {
+      "path": "metabase/results.compiler.json",
+      "bytes": 37679,
+      "sha256": "0a062800c3b748142e765e559567e163d208a3c9836e69f5c4bd87c7adf79ba6"
+    },
+    {
+      "path": "metabase/results.json",
+      "bytes": 55032,
+      "sha256": "a5dbc50a4ae4164ad8a2191e7bce3d0c5d7c40f0e5d7fa81c7056da0a129131f"
+    },
+    {
+      "path": "metabase/run_spike.py",
+      "bytes": 4617,
+      "sha256": "ed21cce3932d8d8d4c3fd9a2728ba64279c3839efbc6b1a00fcc7ed1040ef441"
+    },
+    {
+      "path": "postgres/README.md",
+      "bytes": 3538,
+      "sha256": "8ccb6847bf5be4e0ced90d2f57cec36db283c1420e9600bcb6f0988cd3159d04"
+    },
+    {
+      "path": "postgres/artifacts/first-complete-results.json",
+      "bytes": 22220,
+      "sha256": "e0db975fa5c67169de545cb41126e616c57319716461c1507e16a57f1517bd34"
+    },
+    {
+      "path": "postgres/artifacts/results.json",
+      "bytes": 22220,
+      "sha256": "f3a6456ef4103216ae5afd61437f49dd7d5f5307129e20eafc6f0fd0c272ecd4"
+    },
+    {
+      "path": "postgres/artifacts/revalidation.json",
+      "bytes": 417,
+      "sha256": "270d8ad730e80188c49c27e280338692a4c91b3fa3d776f954f71adc4449b5d4"
+    },
+    {
+      "path": "postgres/bridge.py",
+      "bytes": 13032,
+      "sha256": "b38947a8325179e3a0cb02a7ea3340f93b34f4917f1303be3d263d8db610d5b8"
+    },
+    {
+      "path": "postgres/reproduce.sh",
+      "bytes": 1377,
+      "sha256": "ca72e71ba5b83fb9eeb1402f8cdcc633c09f9c33aa45cc00e270bc870acf0551"
+    },
+    {
+      "path": "postgres/requirements.lock.txt",
+      "bytes": 1181,
+      "sha256": "7fb2b8cc9acc9ed27396aa6c07abee2b899083a3ecc8265c1aa16e15e241e175"
+    },
+    {
+      "path": "postgres/requirements.txt",
+      "bytes": 108,
+      "sha256": "99c33576c7ba506d84911dfc250256bf60a20d0e50cbecd4b38af7f1026315ac"
+    },
+    {
+      "path": "root/jaffle/query.edn",
+      "bytes": 364,
+      "sha256": "59b2865c1873152647c991f0fbf62f93a7869b7483a9d538c55e77e1df7a0127"
+    },
+    {
+      "path": "root/jaffle/results.json",
+      "bytes": 12426,
+      "sha256": "039155134af974981234f22e393e77122d5d74373e65cc7933cb599d63daa6e9"
+    },
+    {
+      "path": "root/jaffle/revalidation.json",
+      "bytes": 230,
+      "sha256": "b82270a6faecf054974a73db026aefb6613ca5664b287fd27975caf69fe95035"
+    },
+    {
+      "path": "root/jaffle_probe.py",
+      "bytes": 10593,
+      "sha256": "aea6e0b19c3180e93ddaf0dfe4176dfce6d39293cc21f0a1906366c50f01aed0"
+    },
+    {
+      "path": "root/probe.py",
+      "bytes": 14327,
+      "sha256": "f07ec291045a5a4e3a1006d71255003a51b9391a1f5b8a8ec2d5481d403dd659"
+    },
+    {
+      "path": "root/reproduce.sh",
+      "bytes": 879,
+      "sha256": "4440585be55c30273c7b6e176ecd352b3db77cf221e8795c4a12a8578ce41c59"
+    },
+    {
+      "path": "root/requirements.txt",
+      "bytes": 82,
+      "sha256": "d7c3b56425d4dfcc5679bb6cfcb6644462b1a668bba095f18852053bd34933f4"
+    },
+    {
+      "path": "root/results.json",
+      "bytes": 4760,
+      "sha256": "1674bfb8274e2dd3c409fd78462ad54b5cc2b3e12a1024b3953cd0ed7cd4cf1c"
+    },
+    {
+      "path": "semantics/README.md",
+      "bytes": 7865,
+      "sha256": "078dc233950e6b9a4d9fbb8e0cabfef1ce381ed956383f2f849e3b345826aa0f"
+    },
+    {
+      "path": "semantics/requirements.txt",
+      "bytes": 44,
+      "sha256": "bf59dcf51da3059eb6d9c1450ff30d74f743970074958bb0138454cc10fd10b8"
+    },
+    {
+      "path": "semantics/restart-comparison.json",
+      "bytes": 628,
+      "sha256": "4b4448b7307affe92c421d39c499199563105bad86e91274acc4639c4d025667"
+    },
+    {
+      "path": "semantics/restart-results.json",
+      "bytes": 119724,
+      "sha256": "9183baac6d9c595f7e5fcf00726da11942238d8f7d58548508c4655c8ed5a654"
+    },
+    {
+      "path": "semantics/results.json",
+      "bytes": 119708,
+      "sha256": "f6831148a33217c0403d48038b8182129453690a714d2fbc47937e3e43427961"
+    },
+    {
+      "path": "semantics/semantic_spike.py",
+      "bytes": 26684,
+      "sha256": "98df89c38dcb76049a2eccbfded18f66fb268646a88250a6cd2852ce27b9a1fc"
+    },
+    {
+      "path": "unconventional/README.md",
+      "bytes": 5708,
+      "sha256": "a7166928135590c1e75ea76c1a6cd173af14f6b2d463fbbf4e7a475efda4a791"
+    },
+    {
+      "path": "unconventional/ibis-dialect-results.json",
+      "bytes": 3128,
+      "sha256": "d4de9de149d51990cbe5050dc879e0fa37dcb12acc9aa1a8c691bdc673c95867"
+    },
+    {
+      "path": "unconventional/ibis-results.json",
+      "bytes": 14087,
+      "sha256": "780ab6cddac5bf393a6e8615009f62ba3315898d78699f9f896851fd7fbf78a0"
+    },
+    {
+      "path": "unconventional/ibis_spike.py",
+      "bytes": 3604,
+      "sha256": "41791aca69b874fbfeb9be49e4fce7324eebdcd628e85482603f4630024c425d"
+    },
+    {
+      "path": "unconventional/sqlmesh-audit-results.json",
+      "bytes": 5681,
+      "sha256": "9e68d70c1ab30ab734b10960736e10ef86cf2304569900ca9049b6d6ec7413b4"
+    },
+    {
+      "path": "unconventional/sqlmesh-incremental-results.json",
+      "bytes": 1251,
+      "sha256": "6aaa8a2f7e86c758d9e4f60aee81e4195028a5c43bc6e64a49d0b7e093ed2e09"
+    },
+    {
+      "path": "unconventional/sqlmesh-jaffle-results.json",
+      "bytes": 5741,
+      "sha256": "c2b920a9b5f46a1bb6ca9d4e7be863bf454b70b7cca573f7098fb0334f27b51f"
+    },
+    {
+      "path": "unconventional/sqlmesh-jaffle-schema-results.json",
+      "bytes": 9425,
+      "sha256": "bf65b87064c6fcb5ae205ef5841715ce7a137e242b754a7c75d510efe0df7e79"
+    },
+    {
+      "path": "unconventional/sqlmesh-results.json",
+      "bytes": 3029,
+      "sha256": "3f832b6a2d4a16ff485ef79b034f61914b4f33b42977f7ebabf8583d4d72bd07"
+    },
+    {
+      "path": "unconventional/sqlmesh_audit_spike.py",
+      "bytes": 1528,
+      "sha256": "c0e55ef9cecce5cd8eb8dca8db2228a011b9d5740bf4b52c9f09c70ea23abb84"
+    },
+    {
+      "path": "unconventional/sqlmesh_incremental_spike.py",
+      "bytes": 3016,
+      "sha256": "d3026aaabc2a689bda76196f419420ea4a32f55768de59a1f42144dd8d1fa93d"
+    },
+    {
+      "path": "unconventional/sqlmesh_jaffle_spike.py",
+      "bytes": 5050,
+      "sha256": "70d7401f39e904f129ca7ab35f2c00169bedb39368fc2e803e392fc506f41408"
+    },
+    {
+      "path": "unconventional/sqlmesh_spike.py",
+      "bytes": 3849,
+      "sha256": "89d3184007fe7becaf4c3daaec0b9416a9e6ee226d269c345a4927c0db6af580"
+    }
+  ]
+}

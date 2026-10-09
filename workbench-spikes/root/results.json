@@ -1,0 +1,160 @@
+{
+  "versions": {
+    "python": "3.12.14",
+    "sqlglot": "30.21.0",
+    "duckdb": "1.5.6",
+    "pyarrow": "25.0.1",
+    "edn_format": "0.8.0"
+  },
+  "synthetic": true,
+  "results": [
+    {
+      "case": "edn_to_sql_two_engines",
+      "status": "pass",
+      "detail": {
+        "sqlite": {
+          "sql": "SELECT \"o\".\"customer_id\" AS \"customer_id\", SUM(\"o\".\"amount\") AS \"revenue\", CAST(SUM(\"o\".\"amount\") AS REAL) / NULLIF(CAST(SUM(\"o\".\"quantity\") AS REAL), 0) AS \"unit_price\" FROM orders AS \"o\" WHERE \"o\".\"status\" = :status GROUP BY \"o\".\"customer_id\" ORDER BY \"o\".\"customer_id\"",
+          "rows": [
+            [
+              1,
+              15.0,
+              5.0
+            ],
+            [
+              2,
+              7.0,
+              null
+            ]
+          ]
+        },
+        "duckdb": {
+          "sql": "SELECT \"o\".\"customer_id\" AS \"customer_id\", SUM(\"o\".\"amount\") AS \"revenue\", CAST(SUM(\"o\".\"amount\") AS DOUBLE) / NULLIF(CAST(SUM(\"o\".\"quantity\") AS DOUBLE), 0) AS \"unit_price\" FROM orders AS \"o\" WHERE \"o\".\"status\" = $status GROUP BY \"o\".\"customer_id\" ORDER BY \"o\".\"customer_id\"",
+          "rows": [
+            [
+              1,
+              15.0,
+              5.0
+            ],
+            [
+              2,
+              7.0,
+              null
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "case": "bound_parameters",
+      "status": "pass",
+      "detail": {
+        "sqlite": {
+          "rows": [],
+          "parameter_stays_separate": true
+        },
+        "duckdb": {
+          "rows": [],
+          "parameter_stays_separate": true
+        }
+      }
+    },
+    {
+      "case": "unsupported_input_rejection",
+      "status": "pass",
+      "detail": {
+        "unknown_operator": "Unsupported operator/arity: mystery",
+        "unknown_column": "Unknown field o.missing",
+        "unknown_version": "Unsupported query version"
+      }
+    },
+    {
+      "case": "dbt_build_edit_rebuild_tests",
+      "status": "pass",
+      "detail": {
+        "initial_rows": [
+          [
+            1,
+            15,
+            5.0
+          ],
+          [
+            2,
+            7,
+            null
+          ]
+        ],
+        "edited_rows": [
+          [
+            1,
+            3,
+            5.0
+          ],
+          [
+            2,
+            0,
+            null
+          ]
+        ],
+        "dbt_dependencies": [
+          "model.demo.orders"
+        ],
+        "dbt_test_statuses": [
+          "success",
+          "pass",
+          "pass"
+        ],
+        "bind_template": "SELECT \"o\".\"customer_id\" AS \"customer_id\", SUM(\"o\".\"amount\") AS \"revenue\", CAST(SUM(\"o\".\"amount\") AS DOUBLE) / NULLIF(CAST(SUM(\"o\".\"quantity\") AS DOUBLE), 0) AS \"unit_price\" FROM {{ ref('orders') }} AS \"o\" WHERE \"o\".\"status\" = $status GROUP BY \"o\".\"customer_id\" ORDER BY \"o\".\"customer_id\"",
+        "generated_sql": "SELECT \"o\".\"customer_id\" AS \"customer_id\", SUM(\"o\".\"amount\") AS \"revenue\", CAST(SUM(\"o\".\"amount\") AS DOUBLE) / NULLIF(CAST(SUM(\"o\".\"quantity\") AS DOUBLE), 0) AS \"unit_price\" FROM {{ ref('orders') }} AS \"o\" WHERE \"o\".\"status\" = 'completed' GROUP BY \"o\".\"customer_id\" ORDER BY \"o\".\"customer_id\"",
+        "edited_generated_sql": "SELECT \"o\".\"customer_id\" AS \"customer_id\", SUM(\"o\".\"quantity\") AS \"revenue\", CAST(SUM(\"o\".\"amount\") AS DOUBLE) / NULLIF(CAST(SUM(\"o\".\"quantity\") AS DOUBLE), 0) AS \"unit_price\" FROM {{ ref('orders') }} AS \"o\" WHERE \"o\".\"status\" = 'completed' GROUP BY \"o\".\"customer_id\" ORDER BY \"o\".\"customer_id\""
+      }
+    },
+    {
+      "case": "persisted_data_restart_and_contexts",
+      "status": "pass",
+      "detail": {
+        "restart_rows": [
+          [
+            1,
+            15.0,
+            5.0
+          ],
+          [
+            2,
+            7.0,
+            null
+          ]
+        ],
+        "different_context_keys": 5
+      }
+    },
+    {
+      "case": "arrow_result_interchange",
+      "status": "pass",
+      "detail": {
+        "bytes": 424,
+        "schema": "id: int64\nvalue: double",
+        "rows": [
+          {
+            "id": 1,
+            "value": 5.0
+          },
+          {
+            "id": 2,
+            "value": null
+          }
+        ]
+      }
+    },
+    {
+      "case": "existing_sql_scope_rewrite",
+      "status": "pass",
+      "detail": {
+        "physical_relations": [
+          "prod.raw.orders",
+          "prod.raw.customers"
+        ],
+        "rewritten_sql": "WITH orders AS (SELECT * FROM snapshot.orders) SELECT * FROM orders AS o WHERE EXISTS(SELECT 1 FROM snapshot.customers AS c WHERE c.id = o.customer_id)"
+      }
+    }
+  ]
+}

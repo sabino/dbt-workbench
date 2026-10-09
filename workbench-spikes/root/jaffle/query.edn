@@ -1,0 +1,7 @@
+{:query/version 1
+      :from {:model "model.jaffle_shop.orders" :as "o"}
+      :select [{:as "customer_id" :expr [:field "o" "customer_id"]}
+               {:as "revenue" :expr [:sum [:field "o" "amount"]]}]
+      :where [:eq [:field "o" "status"] [:param "status" :text]]
+      :group-by [[:field "o" "customer_id"]]
+      :order-by [[:field "o" "customer_id"]]}

@@ -1,0 +1,6 @@
+{
+  "fresh_process_full_workflow": true,
+  "baseline_edit_build_deferral_sqlite_edn_restart_repeated": true,
+  "results_exactly_equal": true,
+  "results_sha256": "039155134af974981234f22e393e77122d5d74373e65cc7933cb599d63daa6e9"
+}

@@ -1,0 +1,13 @@
+{
+  "clean_server_reproduction": true,
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "same_checks": true,
+  "same_snapshot_hashes": true,
+  "passed_checks": 11,
+  "diagnostic_semantic_mismatches": [
+    "edge_untyped_translation_semantics",
+    "edge_typed_translation_semantics",
+    "edge_qualified_typed_translation_semantics"
+  ],
+  "postgres_version": "16.15 (Debian 16.15-1.pgdg12+2)"
+}

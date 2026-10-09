@@ -1,0 +1,4871 @@
+{
+  "run": {
+    "label": "initial-connection-1",
+    "versions": {
+      "python": "3.12.14",
+      "sqlite": "3.53.1",
+      "sqlglot": "30.21.0",
+      "duckdb": "1.5.6",
+      "numpy": "2.4.3"
+    },
+    "fixture": {
+      "customers": [
+        [
+          1,
+          "Ada"
+        ],
+        [
+          2,
+          null
+        ],
+        [
+          3,
+          "Zoë"
+        ],
+        [
+          4,
+          "No orders"
+        ]
+      ],
+      "orders": [
+        [
+          10,
+          1,
+          10.0,
+          2,
+          "2024-01-31"
+        ],
+        [
+          11,
+          1,
+          null,
+          0,
+          "2024-02-01"
+        ],
+        [
+          12,
+          2,
+          5.5,
+          -2,
+          "2024-02-29"
+        ],
+        [
+          13,
+          null,
+          9.0,
+          3,
+          "2024-03-01"
+        ],
+        [
+          14,
+          3,
+          -3.0,
+          2,
+          "2024-03-02"
+        ]
+      ]
+    },
+    "regressions": [
+      {
+        "id": "null_coalesce",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT id, COALESCE(amount, 0) AS amount FROM orders ORDER BY id",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "amount"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ]
+          ],
+          "rows": [
+            [
+              10,
+              10.0
+            ],
+            [
+              11,
+              0
+            ],
+            [
+              12,
+              5.5
+            ],
+            [
+              13,
+              9.0
+            ],
+            [
+              14,
+              -3.0
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT id, COALESCE(amount, 0) AS amount FROM orders ORDER BY id NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "amount"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                10,
+                10.0
+              ],
+              [
+                11,
+                0.0
+              ],
+              [
+                12,
+                5.5
+              ],
+              [
+                13,
+                9.0
+              ],
+              [
+                14,
+                -3.0
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT \"orders\".\"id\" AS \"id\", COALESCE(\"orders\".\"amount\", 0) AS \"amount\" FROM \"orders\" AS \"orders\" ORDER BY \"id\" NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "amount"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                10,
+                10.0
+              ],
+              [
+                11,
+                0.0
+              ],
+              [
+                12,
+                5.5
+              ],
+              [
+                13,
+                9.0
+              ],
+              [
+                14,
+                -3.0
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "null_concat",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT name || NULL AS n FROM customers ORDER BY id",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "NoneType"
+            ],
+            [
+              "NoneType"
+            ],
+            [
+              "NoneType"
+            ],
+            [
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              null
+            ],
+            [
+              null
+            ],
+            [
+              null
+            ],
+            [
+              null
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT name || NULL AS n FROM customers ORDER BY id NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "INTEGER"
+            ],
+            "native_python_types": [
+              [
+                "NoneType"
+              ],
+              [
+                "NoneType"
+              ],
+              [
+                "NoneType"
+              ],
+              [
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                null
+              ],
+              [
+                null
+              ],
+              [
+                null
+              ],
+              [
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT \"customers\".\"name\" || NULL AS \"n\" FROM \"customers\" AS \"customers\" ORDER BY \"customers\".\"id\" NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "INTEGER"
+            ],
+            "native_python_types": [
+              [
+                "NoneType"
+              ],
+              [
+                "NoneType"
+              ],
+              [
+                "NoneType"
+              ],
+              [
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                null
+              ],
+              [
+                null
+              ],
+              [
+                null
+              ],
+              [
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "is_null_and_eq_null",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT name IS NULL AS n, name = NULL AS eq FROM customers ORDER BY id",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n",
+            "eq"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "NoneType"
+            ],
+            [
+              "int",
+              "NoneType"
+            ],
+            [
+              "int",
+              "NoneType"
+            ],
+            [
+              "int",
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              0,
+              null
+            ],
+            [
+              1,
+              null
+            ],
+            [
+              0,
+              null
+            ],
+            [
+              0,
+              null
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT name IS NULL AS n, name = NULL AS eq FROM customers ORDER BY id NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n",
+              "eq"
+            ],
+            "native_type_codes": [
+              "BOOLEAN",
+              "BOOLEAN"
+            ],
+            "native_python_types": [
+              [
+                "bool",
+                "NoneType"
+              ],
+              [
+                "bool",
+                "NoneType"
+              ],
+              [
+                "bool",
+                "NoneType"
+              ],
+              [
+                "bool",
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                false,
+                null
+              ],
+              [
+                true,
+                null
+              ],
+              [
+                false,
+                null
+              ],
+              [
+                false,
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT \"customers\".\"name\" IS NULL AS \"n\", \"customers\".\"name\" = NULL AS \"eq\" FROM \"customers\" AS \"customers\" ORDER BY \"customers\".\"id\" NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n",
+              "eq"
+            ],
+            "native_type_codes": [
+              "BOOLEAN",
+              "BOOLEAN"
+            ],
+            "native_python_types": [
+              [
+                "bool",
+                "NoneType"
+              ],
+              [
+                "bool",
+                "NoneType"
+              ],
+              [
+                "bool",
+                "NoneType"
+              ],
+              [
+                "bool",
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                false,
+                null
+              ],
+              [
+                true,
+                null
+              ],
+              [
+                false,
+                null
+              ],
+              [
+                false,
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "left_join",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT c.id, COUNT(o.id) AS n, SUM(o.amount) AS total FROM customers c LEFT JOIN orders o ON c.id=o.customer_id GROUP BY c.id ORDER BY c.id",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "n",
+            "total"
+          ],
+          "native_type_codes": [
+            "None",
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "int",
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              1,
+              2,
+              10.0
+            ],
+            [
+              2,
+              1,
+              5.5
+            ],
+            [
+              3,
+              1,
+              -3.0
+            ],
+            [
+              4,
+              0,
+              null
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT c.id, COUNT(o.id) AS n, SUM(o.amount) AS total FROM customers AS c LEFT JOIN orders AS o ON c.id = o.customer_id GROUP BY c.id ORDER BY c.id NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "n",
+              "total"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "BIGINT",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "int",
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                1,
+                2,
+                10.0
+              ],
+              [
+                2,
+                1,
+                5.5
+              ],
+              [
+                3,
+                1,
+                -3.0
+              ],
+              [
+                4,
+                0,
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT \"c\".\"id\" AS \"id\", COUNT(\"o\".\"id\") AS \"n\", SUM(\"o\".\"amount\") AS \"total\" FROM \"customers\" AS \"c\" LEFT JOIN \"orders\" AS \"o\" ON \"c\".\"id\" = \"o\".\"customer_id\" GROUP BY \"c\".\"id\" ORDER BY \"id\" NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "n",
+              "total"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "BIGINT",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "int",
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                1,
+                2,
+                10.0
+              ],
+              [
+                2,
+                1,
+                5.5
+              ],
+              [
+                3,
+                1,
+                -3.0
+              ],
+              [
+                4,
+                0,
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "not_in_null",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT id FROM customers WHERE id NOT IN (SELECT customer_id FROM orders) ORDER BY id",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "id"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [],
+          "rows": []
+        },
+        "strict_transpile": {
+          "sql": "SELECT id FROM customers WHERE NOT id IN (SELECT customer_id FROM orders) ORDER BY id NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id"
+            ],
+            "native_type_codes": [
+              "INTEGER"
+            ],
+            "native_python_types": [],
+            "rows": []
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT \"customers\".\"id\" AS \"id\" FROM \"customers\" AS \"customers\" WHERE NOT \"customers\".\"id\" IN (SELECT \"orders\".\"customer_id\" AS \"customer_id\" FROM \"orders\" AS \"orders\") ORDER BY \"id\" NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id"
+            ],
+            "native_type_codes": [
+              "INTEGER"
+            ],
+            "native_python_types": [],
+            "rows": []
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "count_null",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT COUNT(*),COUNT(amount),SUM(amount) FROM orders",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "COUNT(*)",
+            "COUNT(amount)",
+            "SUM(amount)"
+          ],
+          "native_type_codes": [
+            "None",
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int",
+              "float"
+            ]
+          ],
+          "rows": [
+            [
+              5,
+              4,
+              21.5
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT COUNT(*), COUNT(amount), SUM(amount) FROM orders",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "count_star()",
+              "count(amount)",
+              "sum(amount)"
+            ],
+            "native_type_codes": [
+              "BIGINT",
+              "BIGINT",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int",
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                5,
+                4,
+                21.5
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT COUNT(*) AS \"_col_0\", COUNT(\"orders\".\"amount\") AS \"_col_1\", SUM(\"orders\".\"amount\") AS \"_col_2\" FROM \"orders\" AS \"orders\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "_col_0",
+              "_col_1",
+              "_col_2"
+            ],
+            "native_type_codes": [
+              "BIGINT",
+              "BIGINT",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int",
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                5,
+                4,
+                21.5
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "empty_aggregate",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT COUNT(*),SUM(amount) FROM orders WHERE 1=0",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "COUNT(*)",
+            "SUM(amount)"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              0,
+              null
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT COUNT(*), SUM(amount) FROM orders WHERE 1 = 0",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "count_star()",
+              "sum(amount)"
+            ],
+            "native_type_codes": [
+              "BIGINT",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                0,
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT COUNT(*) AS \"_col_0\", SUM(\"orders\".\"amount\") AS \"_col_1\" FROM \"orders\" AS \"orders\" WHERE 1 = 0",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "_col_0",
+              "_col_1"
+            ],
+            "native_type_codes": [
+              "BIGINT",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                0,
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "cte_shadow",
+        "direction": "sqlite->duckdb",
+        "source_sql": "WITH orders AS (SELECT 999 AS id, 6 AS qty) SELECT id, qty FROM orders",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "qty"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              999,
+              6
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "WITH orders AS (SELECT 999 AS id, 6 AS qty) SELECT id, qty FROM orders",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "qty"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "INTEGER"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                999,
+                6
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "WITH \"orders\" AS (SELECT 999 AS \"id\", 6 AS \"qty\") SELECT \"orders\".\"id\" AS \"id\", \"orders\".\"qty\" AS \"qty\" FROM \"orders\" AS \"orders\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "qty"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "INTEGER"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                999,
+                6
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "join_cte",
+        "direction": "sqlite->duckdb",
+        "source_sql": "WITH x AS (SELECT customer_id, SUM(amount) AS total FROM orders GROUP BY customer_id) SELECT c.id, x.total FROM customers c LEFT JOIN x ON c.id=x.customer_id ORDER BY c.id",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "total"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              1,
+              10.0
+            ],
+            [
+              2,
+              5.5
+            ],
+            [
+              3,
+              -3.0
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "WITH x AS (SELECT customer_id, SUM(amount) AS total FROM orders GROUP BY customer_id) SELECT c.id, x.total FROM customers AS c LEFT JOIN x ON c.id = x.customer_id ORDER BY c.id NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "total"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                1,
+                10.0
+              ],
+              [
+                2,
+                5.5
+              ],
+              [
+                3,
+                -3.0
+              ],
+              [
+                4,
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "WITH \"x\" AS (SELECT \"orders\".\"customer_id\" AS \"customer_id\", SUM(\"orders\".\"amount\") AS \"total\" FROM \"orders\" AS \"orders\" GROUP BY \"orders\".\"customer_id\") SELECT \"c\".\"id\" AS \"id\", \"x\".\"total\" AS \"total\" FROM \"customers\" AS \"c\" LEFT JOIN \"x\" AS \"x\" ON \"c\".\"id\" = \"x\".\"customer_id\" ORDER BY \"c\".\"id\" NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "total"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                1,
+                10.0
+              ],
+              [
+                2,
+                5.5
+              ],
+              [
+                3,
+                -3.0
+              ],
+              [
+                4,
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "integer_div_positive",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT 3 / 2 AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              1
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT 3 / NULLIF(2, 0) AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                1.5
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST(3 / 2 AS BIGINT) AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "BIGINT"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                2
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "integer_div_negative",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT -3 / 2 AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              -1
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT -3 / NULLIF(2, 0) AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                -1.5
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST(-3 / 2 AS BIGINT) AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "BIGINT"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                -2
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "integer_div_column",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT id, id / qty AS n FROM orders ORDER BY id",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "n"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "NoneType"
+            ],
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              10,
+              5
+            ],
+            [
+              11,
+              null
+            ],
+            [
+              12,
+              -6
+            ],
+            [
+              13,
+              4
+            ],
+            [
+              14,
+              7
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT id, id / NULLIF(qty, 0) AS n FROM orders ORDER BY id NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "n"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "NoneType"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ],
+              [
+                "int",
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                10,
+                5.0
+              ],
+              [
+                11,
+                null
+              ],
+              [
+                12,
+                -6.0
+              ],
+              [
+                13,
+                4.333333333333333
+              ],
+              [
+                14,
+                7.0
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT \"orders\".\"id\" AS \"id\", CAST(\"orders\".\"id\" / \"orders\".\"qty\" AS BIGINT) AS \"n\" FROM \"orders\" AS \"orders\" ORDER BY \"id\" NULLS FIRST",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "ConversionException",
+            "error": "Conversion Error: Type DOUBLE with value inf can't be cast because the value is out of range for the destination type INT64\n\nLINE 1: SELECT \"orders\".\"id\" AS \"id\", CAST(\"orders\".\"id\" / \"orders\".\"qty\" AS BIGINT) AS \"n\" FROM...\n                                      ^"
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "float_div",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT 3.0 / 2 AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "float"
+            ]
+          ],
+          "rows": [
+            [
+              1.5
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT 3.0 / NULLIF(2, 0) AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                1.5
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT 3.0 / NULLIF(2, 0) AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                1.5
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "division_zero",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT 3 / 0 AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT 3 / NULLIF(0, 0) AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "DOUBLE"
+            ],
+            "native_python_types": [
+              [
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                null
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST(3 / 0 AS BIGINT) AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "ConversionException",
+            "error": "Conversion Error: Type DOUBLE with value inf can't be cast because the value is out of range for the destination type INT64\n\nLINE 1: SELECT CAST(3 / 0 AS BIGINT) AS \"n\"\n               ^"
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "cast_invalid_text",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT CAST('abc' AS INTEGER) AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              0
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST('abc' AS INT) AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "ConversionException",
+            "error": "Conversion Error: Could not convert string 'abc' to INT32\n\nLINE 1: SELECT CAST('abc' AS INT) AS n\n               ^"
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST('abc' AS INT) AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "ConversionException",
+            "error": "Conversion Error: Could not convert string 'abc' to INT32\n\nLINE 1: SELECT CAST('abc' AS INT) AS \"n\"\n               ^"
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "cast_numeric_prefix",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT CAST('123x' AS INTEGER) AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              123
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST('123x' AS INT) AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "ConversionException",
+            "error": "Conversion Error: Could not convert string '123x' to INT32\n\nLINE 1: SELECT CAST('123x' AS INT) AS n\n               ^"
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST('123x' AS INT) AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "ConversionException",
+            "error": "Conversion Error: Could not convert string '123x' to INT32\n\nLINE 1: SELECT CAST('123x' AS INT) AS \"n\"\n               ^"
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "cast_fraction_text",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT CAST('3.5' AS INTEGER) AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              3
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST('3.5' AS INT) AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "INTEGER"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                4
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST('3.5' AS INT) AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "INTEGER"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                4
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "cast_float_truncation",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT CAST(3.5 AS INTEGER) AS n, CAST(-3.5 AS INTEGER) AS neg",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n",
+            "neg"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              3,
+              -3
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST(3.5 AS INT) AS n, CAST(-3.5 AS INT) AS neg",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n",
+              "neg"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "INTEGER"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                4,
+                -4
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST(3.5 AS INT) AS \"n\", CAST(-3.5 AS INT) AS \"neg\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n",
+              "neg"
+            ],
+            "native_type_codes": [
+              "INTEGER",
+              "INTEGER"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                4,
+                -4
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "cast_boolean_text",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT CAST('yes' AS BOOLEAN) AS b",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              0
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST('yes' AS BOOLEAN) AS b",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "b"
+            ],
+            "native_type_codes": [
+              "BOOLEAN"
+            ],
+            "native_python_types": [
+              [
+                "bool"
+              ]
+            ],
+            "rows": [
+              [
+                true
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST('yes' AS BOOLEAN) AS \"b\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "b"
+            ],
+            "native_type_codes": [
+              "BOOLEAN"
+            ],
+            "native_python_types": [
+              [
+                "bool"
+              ]
+            ],
+            "rows": [
+              [
+                true
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "like_ascii_case",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT 'A' LIKE 'a' AS b",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              1
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT 'A' LIKE 'a' AS b",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "b"
+            ],
+            "native_type_codes": [
+              "BOOLEAN"
+            ],
+            "native_python_types": [
+              [
+                "bool"
+              ]
+            ],
+            "rows": [
+              [
+                false
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT 'A' LIKE 'a' AS \"b\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "b"
+            ],
+            "native_type_codes": [
+              "BOOLEAN"
+            ],
+            "native_python_types": [
+              [
+                "bool"
+              ]
+            ],
+            "rows": [
+              [
+                false
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "date_valid",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT date('2024-02-29') AS d",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "d"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "str"
+            ]
+          ],
+          "rows": [
+            [
+              "2024-02-29"
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST('2024-02-29' AS DATE) AS d",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "d"
+            ],
+            "native_type_codes": [
+              "DATE"
+            ],
+            "native_python_types": [
+              [
+                "date"
+              ]
+            ],
+            "rows": [
+              [
+                "2024-02-29"
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST('2024-02-29' AS DATE) AS \"d\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "d"
+            ],
+            "native_type_codes": [
+              "DATE"
+            ],
+            "native_python_types": [
+              [
+                "date"
+              ]
+            ],
+            "rows": [
+              [
+                "2024-02-29"
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "date_overflow",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT date('2024-02-30') AS d",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "d"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "str"
+            ]
+          ],
+          "rows": [
+            [
+              "2024-03-01"
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST('2024-02-30' AS DATE) AS d",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "ConversionException",
+            "error": "Conversion Error: date field value out of range: \"2024-02-30\"\n\nLINE 1: SELECT CAST('2024-02-30' AS DATE) AS d\n               ^"
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST('2024-02-30' AS DATE) AS \"d\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "ConversionException",
+            "error": "Conversion Error: date field value out of range: \"2024-02-30\"\n\nLINE 1: SELECT CAST('2024-02-30' AS DATE) AS \"d\"\n               ^"
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "date_month_rollover",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT date('2024-01-31','+1 month') AS d",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "d"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "str"
+            ]
+          ],
+          "rows": [
+            [
+              "2024-03-02"
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST(CAST('2024-01-31' AS TIMESTAMP) AT TIME ZONE 'UTC' AT TIME ZONE '+1 month' AS DATE) AS d",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "NotImplementedException",
+            "error": "Not implemented Error: Unknown TimeZone '+1 month'!\n\nCandidate time zones: \"America/Godthab\", \"America/Moncton\", \"America/Edmonton\", \"America/Montreal\", \"America/Monterrey\""
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST(CAST('2024-01-31' AS TIMESTAMP) AT TIME ZONE 'UTC' AT TIME ZONE '+1 month' AS DATE) AS \"d\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "NotImplementedException",
+            "error": "Not implemented Error: Unknown TimeZone '+1 month'!\n\nCandidate time zones: \"America/Godthab\", \"America/Moncton\", \"America/Edmonton\", \"America/Montreal\", \"America/Monterrey\""
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "date_modifier_hour",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT datetime('2024-02-29 23:00:00','+1 hour') AS d",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "d"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "str"
+            ]
+          ],
+          "rows": [
+            [
+              "2024-03-01 00:00:00"
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT DATETIME('2024-02-29 23:00:00', '+1 hour') AS d",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "CatalogException",
+            "error": "Catalog Error: Scalar Function with name datetime does not exist!\nDid you mean \"datediff\"?\n\nLINE 1: SELECT DATETIME('2024-02-29 23:00:00', '+1 hour') AS d\n               ^"
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT DATETIME('2024-02-29 23:00:00', '+1 hour') AS \"d\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "CatalogException",
+            "error": "Catalog Error: Scalar Function with name datetime does not exist!\nDid you mean \"datediff\"?\n\nLINE 1: SELECT DATETIME('2024-02-29 23:00:00', '+1 hour') AS \"d\"\n               ^"
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "strftime_day",
+        "direction": "sqlite->duckdb",
+        "source_sql": "SELECT strftime('%Y-%m-%d','2024-02-29 23:00:00') AS d",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "d"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "str"
+            ]
+          ],
+          "rows": [
+            [
+              "2024-02-29"
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT STRFTIME(CAST('2024-02-29 23:00:00' AS TIMESTAMP), '%Y-%m-%d') AS d",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "d"
+            ],
+            "native_type_codes": [
+              "VARCHAR"
+            ],
+            "native_python_types": [
+              [
+                "str"
+              ]
+            ],
+            "rows": [
+              [
+                "2024-02-29"
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT STRFTIME(CAST('2024-02-29 23:00:00' AS TIMESTAMP), '%Y-%m-%d') AS \"d\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "d"
+            ],
+            "native_type_codes": [
+              "VARCHAR"
+            ],
+            "native_python_types": [
+              [
+                "str"
+              ]
+            ],
+            "rows": [
+              [
+                "2024-02-29"
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "float_div_default",
+        "direction": "duckdb->sqlite",
+        "source_sql": "SELECT 3 / 2 AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "DOUBLE"
+          ],
+          "native_python_types": [
+            [
+              "float"
+            ]
+          ],
+          "rows": [
+            [
+              1.5
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST(3 AS REAL) / 2 AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                1.5
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST(3 AS REAL) / 2 AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "float"
+              ]
+            ],
+            "rows": [
+              [
+                1.5
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "division_zero_infinity",
+        "direction": "duckdb->sqlite",
+        "source_sql": "SELECT 3 / 0 AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "DOUBLE"
+          ],
+          "native_python_types": [
+            [
+              "float"
+            ]
+          ],
+          "rows": [
+            [
+              "inf"
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST(3 AS REAL) / 0 AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                null
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST(3 AS REAL) / 0 AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "NoneType"
+              ]
+            ],
+            "rows": [
+              [
+                null
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "try_cast_invalid",
+        "direction": "duckdb->sqlite",
+        "source_sql": "SELECT TRY_CAST('abc' AS BIGINT) AS n",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "BIGINT"
+          ],
+          "native_python_types": [
+            [
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST('abc' AS INTEGER) AS n",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                0
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST('abc' AS INTEGER) AS \"n\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "n"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                0
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "cast_boolean_text",
+        "direction": "duckdb->sqlite",
+        "source_sql": "SELECT CAST('yes' AS BOOLEAN) AS b",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "BOOLEAN"
+          ],
+          "native_python_types": [
+            [
+              "bool"
+            ]
+          ],
+          "rows": [
+            [
+              true
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT CAST('yes' AS INTEGER) AS b",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "b"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                0
+              ]
+            ]
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT CAST('yes' AS INTEGER) AS \"b\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "b"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                0
+              ]
+            ]
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "null_safe_equality",
+        "direction": "duckdb->sqlite",
+        "source_sql": "SELECT NULL IS NOT DISTINCT FROM NULL AS b",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "BOOLEAN"
+          ],
+          "native_python_types": [
+            [
+              "bool"
+            ]
+          ],
+          "rows": [
+            [
+              true
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT NULL IS NOT DISTINCT FROM NULL AS b",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "b"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                1
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT NULL IS NOT DISTINCT FROM NULL AS \"b\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "b"
+            ],
+            "native_type_codes": [
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                1
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "qualify_window",
+        "direction": "duckdb->sqlite",
+        "source_sql": "SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn FROM orders QUALIFY rn<=2 ORDER BY id",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "rn"
+          ],
+          "native_type_codes": [
+            "INTEGER",
+            "BIGINT"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              10,
+              1
+            ],
+            [
+              11,
+              2
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT id, rn FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY id NULLS LAST) AS rn FROM orders ORDER BY id NULLS LAST) AS _t WHERE rn <= 2",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "rn"
+            ],
+            "native_type_codes": [
+              "None",
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int"
+              ],
+              [
+                "int",
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                2
+              ]
+            ]
+          },
+          "equivalent": true
+        },
+        "qualified_typed": {
+          "sql": "SELECT \"id\", \"rn\" FROM (SELECT \"orders\".\"id\" AS \"id\", ROW_NUMBER() OVER (ORDER BY \"orders\".\"id\" NULLS LAST) AS \"rn\", ROW_NUMBER() OVER (ORDER BY \"orders\".\"id\" NULLS LAST) AS _w FROM \"orders\" AS \"orders\" ORDER BY \"id\" NULLS LAST) AS _t WHERE _w <= 2",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "ok",
+            "columns": [
+              "id",
+              "rn"
+            ],
+            "native_type_codes": [
+              "None",
+              "None"
+            ],
+            "native_python_types": [
+              [
+                "int",
+                "int"
+              ],
+              [
+                "int",
+                "int"
+              ]
+            ],
+            "rows": [
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                2
+              ]
+            ]
+          },
+          "equivalent": true
+        }
+      },
+      {
+        "id": "date_trunc_month",
+        "direction": "duckdb->sqlite",
+        "source_sql": "SELECT DATE_TRUNC('month',DATE '2024-02-29') AS d",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "d"
+          ],
+          "native_type_codes": [
+            "TIMESTAMP"
+          ],
+          "native_python_types": [
+            [
+              "datetime"
+            ]
+          ],
+          "rows": [
+            [
+              "2024-02-01 00:00:00"
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT DATE_TRUNC('MONTH', DATE('2024-02-29')) AS d",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "OperationalError",
+            "error": "no such function: DATE_TRUNC"
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT DATE_TRUNC('MONTH', DATE('2024-02-29')) AS \"d\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "OperationalError",
+            "error": "no such function: DATE_TRUNC"
+          },
+          "equivalent": false
+        }
+      },
+      {
+        "id": "array_native",
+        "direction": "duckdb->sqlite",
+        "source_sql": "SELECT [1,2,3] AS xs",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "xs"
+          ],
+          "native_type_codes": [
+            "INTEGER[]"
+          ],
+          "native_python_types": [
+            [
+              "list"
+            ]
+          ],
+          "rows": [
+            [
+              [
+                1,
+                2,
+                3
+              ]
+            ]
+          ]
+        },
+        "strict_transpile": {
+          "sql": "SELECT ARRAY(1, 2, 3) AS xs",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "OperationalError",
+            "error": "no such function: ARRAY"
+          },
+          "equivalent": false
+        },
+        "qualified_typed": {
+          "sql": "SELECT ARRAY(1, 2, 3) AS \"xs\"",
+          "target_evidence": "executed-native",
+          "target": {
+            "status": "error",
+            "error_type": "OperationalError",
+            "error": "no such function: ARRAY"
+          },
+          "equivalent": false
+        }
+      }
+    ],
+    "semantic_lowering": [
+      {
+        "id": "integer_div_positive",
+        "kind": "source-sensitive-lowering",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              1
+            ]
+          ]
+        },
+        "sql": "SELECT 3 // NULLIF(2, 0) AS \"n\"",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "INTEGER"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              1
+            ]
+          ]
+        },
+        "equivalent": true
+      },
+      {
+        "id": "integer_div_negative",
+        "kind": "source-sensitive-lowering",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              -1
+            ]
+          ]
+        },
+        "sql": "SELECT -3 // NULLIF(2, 0) AS \"n\"",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "INTEGER"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              -1
+            ]
+          ]
+        },
+        "equivalent": true
+      },
+      {
+        "id": "integer_div_column",
+        "kind": "source-sensitive-lowering",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "n"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "NoneType"
+            ],
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              10,
+              5
+            ],
+            [
+              11,
+              null
+            ],
+            [
+              12,
+              -6
+            ],
+            [
+              13,
+              4
+            ],
+            [
+              14,
+              7
+            ]
+          ]
+        },
+        "sql": "SELECT \"orders\".\"id\" AS \"id\", \"orders\".\"id\" // NULLIF(\"orders\".\"qty\", 0) AS \"n\" FROM \"orders\" AS \"orders\" ORDER BY \"id\" NULLS FIRST",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "n"
+          ],
+          "native_type_codes": [
+            "INTEGER",
+            "INTEGER"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "NoneType"
+            ],
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "int"
+            ],
+            [
+              "int",
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              10,
+              5
+            ],
+            [
+              11,
+              null
+            ],
+            [
+              12,
+              -6
+            ],
+            [
+              13,
+              4
+            ],
+            [
+              14,
+              7
+            ]
+          ]
+        },
+        "equivalent": true
+      },
+      {
+        "id": "division_zero",
+        "kind": "source-sensitive-lowering",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "sql": "SELECT 3 // NULLIF(0, 0) AS \"n\"",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "INTEGER"
+          ],
+          "native_python_types": [
+            [
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "equivalent": true
+      },
+      {
+        "id": "cast_invalid_text",
+        "kind": "source-sensitive-lowering",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              0
+            ]
+          ]
+        },
+        "sql": "SELECT WB_SQLITE_CAST_INTEGER('abc') AS \"n\"",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "BIGINT"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              0
+            ]
+          ]
+        },
+        "equivalent": true
+      },
+      {
+        "id": "cast_numeric_prefix",
+        "kind": "source-sensitive-lowering",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              123
+            ]
+          ]
+        },
+        "sql": "SELECT WB_SQLITE_CAST_INTEGER('123x') AS \"n\"",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "BIGINT"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              123
+            ]
+          ]
+        },
+        "equivalent": true
+      },
+      {
+        "id": "cast_fraction_text",
+        "kind": "source-sensitive-lowering",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              3
+            ]
+          ]
+        },
+        "sql": "SELECT WB_SQLITE_CAST_INTEGER('3.5') AS \"n\"",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "n"
+          ],
+          "native_type_codes": [
+            "BIGINT"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              3
+            ]
+          ]
+        },
+        "equivalent": true
+      },
+      {
+        "id": "cast_float_truncation",
+        "kind": "source-sensitive-lowering",
+        "source_evidence": "executed-native",
+        "source": {
+          "status": "ok",
+          "columns": [
+            "n",
+            "neg"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              3,
+              -3
+            ]
+          ]
+        },
+        "sql": "SELECT CAST(TRUNC(3.5) AS BIGINT) AS \"n\", CAST(TRUNC(-3.5) AS BIGINT) AS \"neg\"",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "n",
+            "neg"
+          ],
+          "native_type_codes": [
+            "BIGINT",
+            "BIGINT"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              3,
+              -3
+            ]
+          ]
+        },
+        "equivalent": true
+      },
+      {
+        "id": "like_ascii_case",
+        "kind": "source-sensitive-lowering",
+        "status": "rejected",
+        "reason": "SQLite LIKE case/collation behavior requires an explicit compatibility contract",
+        "expected_rejection": true
+      },
+      {
+        "id": "date_month_rollover",
+        "kind": "source-sensitive-lowering",
+        "status": "rejected",
+        "reason": "SQLite date modifiers need SQLite evaluation; reject a timezone interpretation",
+        "expected_rejection": true
+      },
+      {
+        "id": "canonical_float_div_3_2",
+        "kind": "typed-IR-to-AST",
+        "chosen_semantics": {
+          "result": "float64",
+          "on_zero": "null"
+        },
+        "expected": [
+          [
+            1.5
+          ]
+        ],
+        "outputs": {
+          "sqlite": {
+            "sql": "SELECT CAST(3 AS REAL) / NULLIF(CAST(2 AS REAL), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "None"
+              ],
+              "native_python_types": [
+                [
+                  "float"
+                ]
+              ],
+              "rows": [
+                [
+                  1.5
+                ]
+              ]
+            }
+          },
+          "duckdb": {
+            "sql": "SELECT CAST(3 AS DOUBLE) / NULLIF(CAST(2 AS DOUBLE), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "DOUBLE"
+              ],
+              "native_python_types": [
+                [
+                  "float"
+                ]
+              ],
+              "rows": [
+                [
+                  1.5
+                ]
+              ]
+            }
+          }
+        },
+        "equivalent": true
+      },
+      {
+        "id": "canonical_float_div_-3_2",
+        "kind": "typed-IR-to-AST",
+        "chosen_semantics": {
+          "result": "float64",
+          "on_zero": "null"
+        },
+        "expected": [
+          [
+            -1.5
+          ]
+        ],
+        "outputs": {
+          "sqlite": {
+            "sql": "SELECT CAST(-3 AS REAL) / NULLIF(CAST(2 AS REAL), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "None"
+              ],
+              "native_python_types": [
+                [
+                  "float"
+                ]
+              ],
+              "rows": [
+                [
+                  -1.5
+                ]
+              ]
+            }
+          },
+          "duckdb": {
+            "sql": "SELECT CAST(-3 AS DOUBLE) / NULLIF(CAST(2 AS DOUBLE), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "DOUBLE"
+              ],
+              "native_python_types": [
+                [
+                  "float"
+                ]
+              ],
+              "rows": [
+                [
+                  -1.5
+                ]
+              ]
+            }
+          }
+        },
+        "equivalent": true
+      },
+      {
+        "id": "canonical_float_div_3_0",
+        "kind": "typed-IR-to-AST",
+        "chosen_semantics": {
+          "result": "float64",
+          "on_zero": "null"
+        },
+        "expected": [
+          [
+            null
+          ]
+        ],
+        "outputs": {
+          "sqlite": {
+            "sql": "SELECT CAST(3 AS REAL) / NULLIF(CAST(0 AS REAL), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "None"
+              ],
+              "native_python_types": [
+                [
+                  "NoneType"
+                ]
+              ],
+              "rows": [
+                [
+                  null
+                ]
+              ]
+            }
+          },
+          "duckdb": {
+            "sql": "SELECT CAST(3 AS DOUBLE) / NULLIF(CAST(0 AS DOUBLE), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "DOUBLE"
+              ],
+              "native_python_types": [
+                [
+                  "NoneType"
+                ]
+              ],
+              "rows": [
+                [
+                  null
+                ]
+              ]
+            }
+          }
+        },
+        "equivalent": true
+      },
+      {
+        "id": "canonical_float_div_None_2",
+        "kind": "typed-IR-to-AST",
+        "chosen_semantics": {
+          "result": "float64",
+          "on_zero": "null"
+        },
+        "expected": [
+          [
+            null
+          ]
+        ],
+        "outputs": {
+          "sqlite": {
+            "sql": "SELECT CAST(NULL AS REAL) / NULLIF(CAST(2 AS REAL), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "None"
+              ],
+              "native_python_types": [
+                [
+                  "NoneType"
+                ]
+              ],
+              "rows": [
+                [
+                  null
+                ]
+              ]
+            }
+          },
+          "duckdb": {
+            "sql": "SELECT CAST(NULL AS DOUBLE) / NULLIF(CAST(2 AS DOUBLE), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "DOUBLE"
+              ],
+              "native_python_types": [
+                [
+                  "NoneType"
+                ]
+              ],
+              "rows": [
+                [
+                  null
+                ]
+              ]
+            }
+          }
+        },
+        "equivalent": true
+      },
+      {
+        "id": "canonical_float_div_7_3",
+        "kind": "typed-IR-to-AST",
+        "chosen_semantics": {
+          "result": "float64",
+          "on_zero": "null"
+        },
+        "expected": [
+          [
+            2.3333333333333335
+          ]
+        ],
+        "outputs": {
+          "sqlite": {
+            "sql": "SELECT CAST(7 AS REAL) / NULLIF(CAST(3 AS REAL), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "None"
+              ],
+              "native_python_types": [
+                [
+                  "float"
+                ]
+              ],
+              "rows": [
+                [
+                  2.3333333333333335
+                ]
+              ]
+            }
+          },
+          "duckdb": {
+            "sql": "SELECT CAST(7 AS DOUBLE) / NULLIF(CAST(3 AS DOUBLE), 0) AS ratio",
+            "result": {
+              "status": "ok",
+              "columns": [
+                "ratio"
+              ],
+              "native_type_codes": [
+                "DOUBLE"
+              ],
+              "native_python_types": [
+                [
+                  "float"
+                ]
+              ],
+              "rows": [
+                [
+                  2.3333333333333335
+                ]
+              ]
+            }
+          }
+        },
+        "equivalent": true
+      },
+      {
+        "id": "documented_bigquery_safe_bool_yes",
+        "kind": "source-specific-guard",
+        "source_evidence": "documentation-only-not-executed",
+        "source_url": "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_bool",
+        "sql": "SELECT CASE WHEN LOWER($v) IN ('true', 'false') THEN CAST($v AS BOOLEAN) ELSE NULL END AS b",
+        "bindings": {
+          "v": "yes"
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "BOOLEAN"
+          ],
+          "native_python_types": [
+            [
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "documented_expected": [
+          [
+            null
+          ]
+        ],
+        "matches_documented_expected": true
+      },
+      {
+        "id": "documented_bigquery_safe_bool_TRUE",
+        "kind": "source-specific-guard",
+        "source_evidence": "documentation-only-not-executed",
+        "source_url": "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_bool",
+        "sql": "SELECT CASE WHEN LOWER($v) IN ('true', 'false') THEN CAST($v AS BOOLEAN) ELSE NULL END AS b",
+        "bindings": {
+          "v": "TRUE"
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "BOOLEAN"
+          ],
+          "native_python_types": [
+            [
+              "bool"
+            ]
+          ],
+          "rows": [
+            [
+              true
+            ]
+          ]
+        },
+        "documented_expected": [
+          [
+            true
+          ]
+        ],
+        "matches_documented_expected": true
+      },
+      {
+        "id": "documented_bigquery_safe_bool_false",
+        "kind": "source-specific-guard",
+        "source_evidence": "documentation-only-not-executed",
+        "source_url": "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_bool",
+        "sql": "SELECT CASE WHEN LOWER($v) IN ('true', 'false') THEN CAST($v AS BOOLEAN) ELSE NULL END AS b",
+        "bindings": {
+          "v": "false"
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "BOOLEAN"
+          ],
+          "native_python_types": [
+            [
+              "bool"
+            ]
+          ],
+          "rows": [
+            [
+              false
+            ]
+          ]
+        },
+        "documented_expected": [
+          [
+            false
+          ]
+        ],
+        "matches_documented_expected": true
+      },
+      {
+        "id": "documented_bigquery_safe_bool_ true ",
+        "kind": "source-specific-guard",
+        "source_evidence": "documentation-only-not-executed",
+        "source_url": "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_bool",
+        "sql": "SELECT CASE WHEN LOWER($v) IN ('true', 'false') THEN CAST($v AS BOOLEAN) ELSE NULL END AS b",
+        "bindings": {
+          "v": " true "
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "BOOLEAN"
+          ],
+          "native_python_types": [
+            [
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "documented_expected": [
+          [
+            null
+          ]
+        ],
+        "matches_documented_expected": true
+      },
+      {
+        "id": "documented_bigquery_safe_bool_None",
+        "kind": "source-specific-guard",
+        "source_evidence": "documentation-only-not-executed",
+        "source_url": "https://docs.cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_bool",
+        "sql": "SELECT CASE WHEN LOWER($v) IN ('true', 'false') THEN CAST($v AS BOOLEAN) ELSE NULL END AS b",
+        "bindings": {
+          "v": null
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "b"
+          ],
+          "native_type_codes": [
+            "BOOLEAN"
+          ],
+          "native_python_types": [
+            [
+              "NoneType"
+            ]
+          ],
+          "rows": [
+            [
+              null
+            ]
+          ]
+        },
+        "documented_expected": [
+          [
+            null
+          ]
+        ],
+        "matches_documented_expected": true
+      },
+      {
+        "id": "documented_snowflake_epoch_string_milliseconds",
+        "kind": "source-specific-unit-lowering",
+        "source_evidence": "documentation-only-not-executed",
+        "source_url": "https://docs.snowflake.com/en/sql-reference/functions/to_timestamp#usage-notes",
+        "sql": "SELECT EPOCH_MS(1500000000000) AS ts",
+        "target": {
+          "status": "ok",
+          "columns": [
+            "ts"
+          ],
+          "native_type_codes": [
+            "TIMESTAMP"
+          ],
+          "native_python_types": [
+            [
+              "datetime"
+            ]
+          ],
+          "rows": [
+            [
+              "2017-07-14 02:40:00"
+            ]
+          ]
+        },
+        "documented_expected": "2017-07-14 02:40:00",
+        "matches_documented_expected": true
+      },
+      {
+        "id": "sqlite_overflow_negative",
+        "status": "rejected",
+        "expected_rejection": true,
+        "reason": "SQLite integer overflow promotes to float; native target int division differs"
+      }
+    ],
+    "roundtrip": [
+      {
+        "id": "basic",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "SELECT o.id, o.amount + 2 AS next_amount FROM orders AS o WHERE o.qty > 0 ORDER BY o.id LIMIT 3",
+          "source_sha256": "9fbb953963ea11619c3ba6acd5fbca296da5202f6ca02f74c5f65aab8aca1083",
+          "source_dialect": "sqlite",
+          "editable": true,
+          "ir": {
+            "ir/version": 1,
+            "sql_semantics_dialect": "sqlite",
+            "query": {
+              "select": [
+                {
+                  "expr": {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "o",
+                        "quoted": false
+                      },
+                      {
+                        "name": "id",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  "alias": null
+                },
+                {
+                  "expr": {
+                    "op": "add",
+                    "args": [
+                      {
+                        "op": "field",
+                        "parts": [
+                          {
+                            "name": "o",
+                            "quoted": false
+                          },
+                          {
+                            "name": "amount",
+                            "quoted": false
+                          }
+                        ]
+                      },
+                      {
+                        "op": "literal",
+                        "text": "2",
+                        "is_string": false
+                      }
+                    ]
+                  },
+                  "alias": {
+                    "name": "next_amount",
+                    "quoted": false
+                  }
+                }
+              ],
+              "from": {
+                "parts": [
+                  {
+                    "name": "orders",
+                    "quoted": false
+                  }
+                ],
+                "alias": {
+                  "name": "o",
+                  "quoted": false
+                }
+              },
+              "where": {
+                "op": "gt",
+                "args": [
+                  {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "o",
+                        "quoted": false
+                      },
+                      {
+                        "name": "qty",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  {
+                    "op": "literal",
+                    "text": "0",
+                    "is_string": false
+                  }
+                ]
+              },
+              "order": [
+                {
+                  "expr": {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "o",
+                        "quoted": false
+                      },
+                      {
+                        "name": "id",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  "desc": false,
+                  "nulls_first": true
+                }
+              ],
+              "limit": 3
+            }
+          }
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "regenerated_sql": "SELECT o.id, o.amount + 2 AS next_amount FROM orders AS o WHERE o.qty > 0 ORDER BY o.id ASC LIMIT 3",
+        "target_sql": "SELECT o.id, o.amount + 2 AS next_amount FROM orders AS o WHERE o.qty > 0 ORDER BY o.id ASC NULLS FIRST LIMIT 3",
+        "bindings": {},
+        "original": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "next_amount"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ]
+          ],
+          "rows": [
+            [
+              10,
+              12.0
+            ],
+            [
+              13,
+              11.0
+            ],
+            [
+              14,
+              -1.0
+            ]
+          ]
+        },
+        "same_engine": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "next_amount"
+          ],
+          "native_type_codes": [
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ]
+          ],
+          "rows": [
+            [
+              10,
+              12.0
+            ],
+            [
+              13,
+              11.0
+            ],
+            [
+              14,
+              -1.0
+            ]
+          ]
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "id",
+            "next_amount"
+          ],
+          "native_type_codes": [
+            "INTEGER",
+            "DOUBLE"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ],
+            [
+              "int",
+              "float"
+            ]
+          ],
+          "rows": [
+            [
+              10,
+              12.0
+            ],
+            [
+              13,
+              11.0
+            ],
+            [
+              14,
+              -1.0
+            ]
+          ]
+        },
+        "same_engine_equivalent": true,
+        "cross_engine_equivalent_fixture_only": true
+      },
+      {
+        "id": "comments",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "-- owner: analytics\nSELECT /* keep this rationale */ id AS order_id FROM orders\nWHERE qty > 0 -- zero excluded\nORDER BY id",
+          "source_sha256": "b2771c9b5670009c6c579577bd32c083a5b2b1fead3de2f2c6817d02ea6c4b31",
+          "source_dialect": "sqlite",
+          "editable": true,
+          "ir": {
+            "ir/version": 1,
+            "sql_semantics_dialect": "sqlite",
+            "query": {
+              "select": [
+                {
+                  "expr": {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "id",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  "alias": {
+                    "name": "order_id",
+                    "quoted": false
+                  }
+                }
+              ],
+              "from": {
+                "parts": [
+                  {
+                    "name": "orders",
+                    "quoted": false
+                  }
+                ],
+                "alias": null
+              },
+              "where": {
+                "op": "gt",
+                "args": [
+                  {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "qty",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  {
+                    "op": "literal",
+                    "text": "0",
+                    "is_string": false
+                  }
+                ]
+              },
+              "order": [
+                {
+                  "expr": {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "id",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  "desc": false,
+                  "nulls_first": true
+                }
+              ]
+            }
+          }
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "regenerated_sql": "SELECT id AS order_id FROM orders WHERE qty > 0 ORDER BY id ASC",
+        "target_sql": "SELECT id AS order_id FROM orders WHERE qty > 0 ORDER BY id ASC NULLS FIRST",
+        "bindings": {},
+        "original": {
+          "status": "ok",
+          "columns": [
+            "order_id"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ],
+            [
+              "int"
+            ],
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              10
+            ],
+            [
+              13
+            ],
+            [
+              14
+            ]
+          ]
+        },
+        "same_engine": {
+          "status": "ok",
+          "columns": [
+            "order_id"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ],
+            [
+              "int"
+            ],
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              10
+            ],
+            [
+              13
+            ],
+            [
+              14
+            ]
+          ]
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "order_id"
+          ],
+          "native_type_codes": [
+            "INTEGER"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ],
+            [
+              "int"
+            ],
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              10
+            ],
+            [
+              13
+            ],
+            [
+              14
+            ]
+          ]
+        },
+        "same_engine_equivalent": true,
+        "cross_engine_equivalent_fixture_only": true
+      },
+      {
+        "id": "named_params",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "SELECT :x AS n, :x + 1 AS next, :label AS label",
+          "source_sha256": "3528bc416ba67133d77e5039e1021da9efe2ae29ce7c2b2b9d0f4efbbab75656",
+          "source_dialect": "sqlite",
+          "editable": true,
+          "ir": {
+            "ir/version": 1,
+            "sql_semantics_dialect": "sqlite",
+            "query": {
+              "select": [
+                {
+                  "expr": {
+                    "op": "param",
+                    "name": "x"
+                  },
+                  "alias": {
+                    "name": "n",
+                    "quoted": false
+                  }
+                },
+                {
+                  "expr": {
+                    "op": "add",
+                    "args": [
+                      {
+                        "op": "param",
+                        "name": "x"
+                      },
+                      {
+                        "op": "literal",
+                        "text": "1",
+                        "is_string": false
+                      }
+                    ]
+                  },
+                  "alias": {
+                    "name": "next",
+                    "quoted": false
+                  }
+                },
+                {
+                  "expr": {
+                    "op": "param",
+                    "name": "label"
+                  },
+                  "alias": {
+                    "name": "label",
+                    "quoted": false
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "regenerated_sql": "SELECT :x AS n, :x + 1 AS next, :label AS label",
+        "target_sql": "SELECT $x AS n, $x + 1 AS next, $label AS label",
+        "bindings": {
+          "x": 41,
+          "label": "O'Reilly ☃ ; DROP TABLE orders; --"
+        },
+        "original": {
+          "status": "ok",
+          "columns": [
+            "n",
+            "next",
+            "label"
+          ],
+          "native_type_codes": [
+            "None",
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int",
+              "str"
+            ]
+          ],
+          "rows": [
+            [
+              41,
+              42,
+              "O'Reilly ☃ ; DROP TABLE orders; --"
+            ]
+          ]
+        },
+        "same_engine": {
+          "status": "ok",
+          "columns": [
+            "n",
+            "next",
+            "label"
+          ],
+          "native_type_codes": [
+            "None",
+            "None",
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int",
+              "str"
+            ]
+          ],
+          "rows": [
+            [
+              41,
+              42,
+              "O'Reilly ☃ ; DROP TABLE orders; --"
+            ]
+          ]
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "n",
+            "next",
+            "label"
+          ],
+          "native_type_codes": [
+            "INTEGER",
+            "INTEGER",
+            "VARCHAR"
+          ],
+          "native_python_types": [
+            [
+              "int",
+              "int",
+              "str"
+            ]
+          ],
+          "rows": [
+            [
+              41,
+              42,
+              "O'Reilly ☃ ; DROP TABLE orders; --"
+            ]
+          ]
+        },
+        "same_engine_equivalent": true,
+        "cross_engine_equivalent_fixture_only": true
+      },
+      {
+        "id": "eq_null_is_not_isnull",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "SELECT id FROM orders WHERE amount = NULL ORDER BY id",
+          "source_sha256": "e8d05764ef753a760a5d7c742bb80772050672aa8a4f2e67f7be1154e3777e7c",
+          "source_dialect": "sqlite",
+          "editable": true,
+          "ir": {
+            "ir/version": 1,
+            "sql_semantics_dialect": "sqlite",
+            "query": {
+              "select": [
+                {
+                  "expr": {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "id",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  "alias": null
+                }
+              ],
+              "from": {
+                "parts": [
+                  {
+                    "name": "orders",
+                    "quoted": false
+                  }
+                ],
+                "alias": null
+              },
+              "where": {
+                "op": "eq",
+                "args": [
+                  {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "amount",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  {
+                    "op": "null"
+                  }
+                ]
+              },
+              "order": [
+                {
+                  "expr": {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "id",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  "desc": false,
+                  "nulls_first": true
+                }
+              ]
+            }
+          }
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "regenerated_sql": "SELECT id FROM orders WHERE amount = NULL ORDER BY id ASC",
+        "target_sql": "SELECT id FROM orders WHERE amount = NULL ORDER BY id ASC NULLS FIRST",
+        "bindings": {},
+        "original": {
+          "status": "ok",
+          "columns": [
+            "id"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [],
+          "rows": []
+        },
+        "same_engine": {
+          "status": "ok",
+          "columns": [
+            "id"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [],
+          "rows": []
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "id"
+          ],
+          "native_type_codes": [
+            "INTEGER"
+          ],
+          "native_python_types": [],
+          "rows": []
+        },
+        "same_engine_equivalent": true,
+        "cross_engine_equivalent_fixture_only": true
+      },
+      {
+        "id": "is_null",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "SELECT id FROM orders WHERE amount IS NULL ORDER BY id",
+          "source_sha256": "90b05d39c7f01d590c8f98a06cec605b519460a243cbf69cb2c8f3fab2d7335f",
+          "source_dialect": "sqlite",
+          "editable": true,
+          "ir": {
+            "ir/version": 1,
+            "sql_semantics_dialect": "sqlite",
+            "query": {
+              "select": [
+                {
+                  "expr": {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "id",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  "alias": null
+                }
+              ],
+              "from": {
+                "parts": [
+                  {
+                    "name": "orders",
+                    "quoted": false
+                  }
+                ],
+                "alias": null
+              },
+              "where": {
+                "op": "is_null",
+                "arg": {
+                  "op": "field",
+                  "parts": [
+                    {
+                      "name": "amount",
+                      "quoted": false
+                    }
+                  ]
+                }
+              },
+              "order": [
+                {
+                  "expr": {
+                    "op": "field",
+                    "parts": [
+                      {
+                        "name": "id",
+                        "quoted": false
+                      }
+                    ]
+                  },
+                  "desc": false,
+                  "nulls_first": true
+                }
+              ]
+            }
+          }
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "regenerated_sql": "SELECT id FROM orders WHERE amount IS NULL ORDER BY id ASC",
+        "target_sql": "SELECT id FROM orders WHERE amount IS NULL ORDER BY id ASC NULLS FIRST",
+        "bindings": {},
+        "original": {
+          "status": "ok",
+          "columns": [
+            "id"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              11
+            ]
+          ]
+        },
+        "same_engine": {
+          "status": "ok",
+          "columns": [
+            "id"
+          ],
+          "native_type_codes": [
+            "None"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              11
+            ]
+          ]
+        },
+        "target": {
+          "status": "ok",
+          "columns": [
+            "id"
+          ],
+          "native_type_codes": [
+            "INTEGER"
+          ],
+          "native_python_types": [
+            [
+              "int"
+            ]
+          ],
+          "rows": [
+            [
+              11
+            ]
+          ]
+        },
+        "same_engine_equivalent": true,
+        "cross_engine_equivalent_fixture_only": true
+      },
+      {
+        "id": "jinja",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "{{ config(materialized='table') }}\n-- retain exact source\nSELECT * FROM {{ ref('orders') }} WHERE id > {{ var('cutoff', 0) }}",
+          "source_sha256": "9146caad33f4061e2a523c578561b8b10b2092fb7f0b60fbb19c731bf7e965d6",
+          "source_dialect": "sqlite",
+          "editable": false,
+          "reason": "Jinja source is preserved and must first be compiled by dbt"
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "expected_opaque": true
+      },
+      {
+        "id": "unsupported_cte",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "-- keep\nWITH x AS (SELECT id FROM orders) SELECT id FROM x",
+          "source_sha256": "08a0aeaf6c91ea61096594e483c41f45f3e7d2959e910aaa1873afa3a6298b07",
+          "source_dialect": "sqlite",
+          "editable": false,
+          "reason": "This SELECT uses clauses outside the bounded editable IR"
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "expected_opaque": true
+      },
+      {
+        "id": "unsupported_udf",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "SELECT MY_UDF(id) AS n FROM orders",
+          "source_sha256": "8f66d751687cb7ef755f678937d67cdb29046300e73f3645bacb01a13f9120f8",
+          "source_dialect": "sqlite",
+          "editable": false,
+          "reason": "Expression Anonymous is outside the bounded editable IR"
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "expected_opaque": true
+      },
+      {
+        "id": "unsupported_div",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "SELECT id / qty AS n FROM orders",
+          "source_sha256": "e9e729016fddade2d263d0d2502c890c1caa07ae0c5a9c03da223f0cd348c956",
+          "source_dialect": "sqlite",
+          "editable": false,
+          "reason": "Expression Div is outside the bounded editable IR"
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "expected_opaque": true
+      },
+      {
+        "id": "unsupported_join",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "SELECT o.id FROM orders o JOIN customers c ON c.id=o.customer_id",
+          "source_sha256": "3ac11cb96a06a01c6c90505f506661fea447b582060501a6a018bc6b10d3413f",
+          "source_dialect": "sqlite",
+          "editable": false,
+          "reason": "This SELECT uses clauses outside the bounded editable IR"
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "expected_opaque": true
+      },
+      {
+        "id": "multi_statement",
+        "envelope": {
+          "authoritative_kind": "sql",
+          "authoritative_sql": "SELECT 1; SELECT 2",
+          "source_sha256": "7bcedd3a84d3027b3187aebf36d52df923519ccd977cdd58ace5c54268a4b9f0",
+          "source_dialect": "sqlite",
+          "editable": false,
+          "reason": "Only a single SELECT is editable"
+        },
+        "exact_source_preserved": true,
+        "sha256_preserved": true,
+        "expected_opaque": true
+      },
+      {
+        "id": "unknown_ir_version",
+        "expected_rejection": true,
+        "error": "Unknown authoring schema version"
+      }
+    ],
+    "emulation": {
+      "kind": "source-semantic-island-UDF",
+      "source_engine_executed": true,
+      "target_engine_executed": true,
+      "values": [
+        null,
+        "abc",
+        "123x",
+        "3.5",
+        "-3.5",
+        "9223372036854775808",
+        "-9223372036854775809",
+        " 42xyz "
+      ],
+      "source": [
+        null,
+        0,
+        123,
+        3,
+        -3,
+        9223372036854775807,
+        -9223372036854775808,
+        42
+      ],
+      "target": [
+        null,
+        0,
+        123,
+        3,
+        -3,
+        9223372036854775807,
+        -9223372036854775808,
+        42
+      ],
+      "equivalent": true,
+      "timing": {
+        "rows": 10000,
+        "seconds": 0.6099694609997641,
+        "sum": 49995000,
+        "expected_sum": 49995000
+      },
+      "limits": [
+        "VARCHAR to SQLite INTEGER only; not SQLite BLOB/dynamic type affinity",
+        "Python callback plus SQLite call per row; illustrative, not a performance benchmark",
+        "Driver must re-register UDF for each DuckDB connection",
+        "SQLite cast semantics depend on pinned SQLite version"
+      ]
+    },
+    "persistence": {
+      "persisted_paths": {
+        "sqlite": "/tmp/workbench-spikes/semantics/reopen.sqlite",
+        "duckdb": "/tmp/workbench-spikes/semantics/reopen.duckdb"
+      },
+      "data_survived_close_reopen": true,
+      "UDF_missing_before_driver_initialization": true,
+      "after_driver_initialization_matches_source": true,
+      "source": {
+        "status": "ok",
+        "columns": [
+          "n"
+        ],
+        "native_type_codes": [
+          "None"
+        ],
+        "native_python_types": [
+          [
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            123
+          ]
+        ]
+      },
+      "target": {
+        "status": "ok",
+        "columns": [
+          "n"
+        ],
+        "native_type_codes": [
+          "BIGINT"
+        ],
+        "native_python_types": [
+          [
+            "int"
+          ]
+        ],
+        "rows": [
+          [
+            123
+          ]
+        ]
+      },
+      "contract": "Reconnect must initialize connection-local semantic functions; database storage alone does not persist Python UDF registrations."
+    },
+    "dynamic_affinity": {
+      "source_evidence": "executed-native",
+      "target_evidence": "executed-native",
+      "declared_type": "INTEGER",
+      "sqlite": {
+        "status": "ok",
+        "columns": [
+          "n",
+          "stored_type"
+        ],
+        "native_type_codes": [
+          "None",
+          "None"
+        ],
+        "native_python_types": [
+          [
+            "str",
+            "str"
+          ],
+          [
+            "float",
+            "str"
+          ],
+          [
+            "int",
+            "str"
+          ]
+        ],
+        "rows": [
+          [
+            "abc",
+            "text"
+          ],
+          [
+            1.5,
+            "real"
+          ],
+          [
+            2,
+            "integer"
+          ]
+        ]
+      },
+      "duckdb_import": {
+        "status": "error",
+        "error_type": "ConversionException",
+        "error": "Conversion Error: Could not convert string 'abc' to INT32\n\nLINE 1: INSERT INTO affinity VALUES ('abc')\n                                     ^"
+      },
+      "scope_limit_proved": true,
+      "implication": "Declared SQLite schema is insufficient to certify fixed column types. Validate actual imported values or retain native execution."
+    }
+  },
+  "fresh_connection_revalidation": {
+    "equivalent": true,
+    "second_label": "initial-connection-2"
+  },
+  "methodology": {
+    "remote_warehouses_executed": false,
+    "sqlite_duckdb_comparisons": "both real native engines executed",
+    "comparison_contract": "row values after ISO date/time serialization; not native SQL type identity or full relational equivalence. Native type codes and Python types are recorded separately.",
+    "coverage_contract": "deliberately adversarial fixed corpus; match counts are not a dialect-support percentage",
+    "BigQuery_Snowflake": "documented source behavior; corrected DuckDB executed only",
+    "IR_scope": "bounded SELECT scalar expressions; authoritative raw SQL retained exactly"
+  }
+}

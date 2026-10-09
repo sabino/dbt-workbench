@@ -1,0 +1,582 @@
+{
+  "source": {
+    "url": "https://github.com/dbt-labs/jaffle-shop-classic",
+    "commit": "fd7bfacae4f497ff044a6a0275268676bf1b64c3"
+  },
+  "versions": {
+    "sqlglot": "30.21.0",
+    "duckdb": "1.5.6",
+    "sqlite": "3.53.1",
+    "dbt-core": "1.12.5"
+  },
+  "snapshots": {
+    "stg_customers": {
+      "columns": [
+        [
+          "customer_id",
+          "INTEGER"
+        ],
+        [
+          "first_name",
+          "VARCHAR"
+        ],
+        [
+          "last_name",
+          "VARCHAR"
+        ]
+      ],
+      "rows": 100,
+      "dataset_sha256": "36532cc601cd40686ff7c8713f968bfe376ebd62025eb7e774105311aa8eb753"
+    },
+    "stg_orders": {
+      "columns": [
+        [
+          "order_id",
+          "INTEGER"
+        ],
+        [
+          "customer_id",
+          "INTEGER"
+        ],
+        [
+          "order_date",
+          "DATE"
+        ],
+        [
+          "status",
+          "VARCHAR"
+        ]
+      ],
+      "rows": 99,
+      "dataset_sha256": "bfb89b65963175cabdd13b68274fd53dc4eadf7864f51bf9b761292bc5742f8a"
+    },
+    "stg_payments": {
+      "columns": [
+        [
+          "payment_id",
+          "INTEGER"
+        ],
+        [
+          "order_id",
+          "INTEGER"
+        ],
+        [
+          "payment_method",
+          "VARCHAR"
+        ],
+        [
+          "amount",
+          "DOUBLE"
+        ]
+      ],
+      "rows": 113,
+      "dataset_sha256": "a3835756ed7d478cb7e44590a1328c1b886727f24f59d211ecc34a7bae1496aa"
+    },
+    "orders": {
+      "columns": [
+        [
+          "order_id",
+          "INTEGER"
+        ],
+        [
+          "customer_id",
+          "INTEGER"
+        ],
+        [
+          "order_date",
+          "DATE"
+        ],
+        [
+          "status",
+          "VARCHAR"
+        ],
+        [
+          "credit_card_amount",
+          "DOUBLE"
+        ],
+        [
+          "coupon_amount",
+          "DOUBLE"
+        ],
+        [
+          "bank_transfer_amount",
+          "DOUBLE"
+        ],
+        [
+          "gift_card_amount",
+          "DOUBLE"
+        ],
+        [
+          "amount",
+          "DOUBLE"
+        ]
+      ],
+      "rows": 99,
+      "dataset_sha256": "7d89625fc0a1acef9c456426046268b32255d0eecda5144296037c575edc6a53"
+    }
+  },
+  "numeric_comparison": {
+    "absolute_tolerance": 1e-09,
+    "relative_tolerance": 1e-09
+  },
+  "results": [
+    {
+      "case": "classic_dbt_baseline",
+      "status": "pass",
+      "models": 5,
+      "tests": 20,
+      "seeds": 3,
+      "orders": 99,
+      "customers": 100
+    },
+    {
+      "case": "classic_edit_selected_build_defer_tests",
+      "status": "pass",
+      "result_rows": 99,
+      "test_statuses": [
+        "success",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "deferred_inputs": [
+        "stg_orders",
+        "stg_payments"
+      ],
+      "baseline_unchanged": true
+    },
+    {
+      "case": "classic_compiled_orders_duckdb_to_sqlite",
+      "status": "pass",
+      "rows": 99,
+      "rewritten_inputs": [
+        "jaffle_prod.main.stg_orders",
+        "jaffle_prod.main.stg_payments"
+      ],
+      "sql": "WITH orders AS (SELECT * FROM stg_orders), payments AS (SELECT * FROM stg_payments), order_payments AS (SELECT order_id, SUM(CASE WHEN payment_method = 'credit_card' THEN amount ELSE 0 END) AS credit_card_amount, SUM(CASE WHEN payment_method = 'coupon' THEN amount ELSE 0 END) AS coupon_amount, SUM(CASE WHEN payment_method = 'bank_transfer' THEN amount ELSE 0 END) AS bank_transfer_amount, SUM(CASE WHEN payment_method = 'gift_card' THEN amount ELSE 0 END) AS gift_card_amount, SUM(amount) AS total_amount FROM payments GROUP BY order_id), final AS (SELECT orders.order_id, orders.customer_id, orders.order_date, orders.status, order_payments.credit_card_amount, order_payments.coupon_amount, order_payments.bank_transfer_amount, order_payments.gift_card_amount, order_payments.total_amount AS amount FROM orders LEFT JOIN order_payments ON orders.order_id = order_payments.order_id) SELECT * FROM final"
+    },
+    {
+      "case": "classic_compiled_customers_duckdb_to_sqlite",
+      "status": "pass",
+      "rows": 100,
+      "rewritten_inputs": [
+        "jaffle_prod.main.stg_customers",
+        "jaffle_prod.main.stg_orders",
+        "jaffle_prod.main.stg_payments"
+      ],
+      "sql": "WITH customers AS (SELECT * FROM stg_customers), orders AS (SELECT * FROM stg_orders), payments AS (SELECT * FROM stg_payments), customer_orders AS (SELECT customer_id, MIN(order_date) AS first_order, MAX(order_date) AS most_recent_order, COUNT(order_id) AS number_of_orders FROM orders GROUP BY customer_id), customer_payments AS (SELECT orders.customer_id, SUM(amount) AS total_amount FROM payments LEFT JOIN orders ON payments.order_id = orders.order_id GROUP BY orders.customer_id), final AS (SELECT customers.customer_id, customers.first_name, customers.last_name, customer_orders.first_order, customer_orders.most_recent_order, customer_orders.number_of_orders, customer_payments.total_amount AS customer_lifetime_value FROM customers LEFT JOIN customer_orders ON customers.customer_id = customer_orders.customer_id LEFT JOIN customer_payments ON customers.customer_id = customer_payments.customer_id) SELECT * FROM final"
+    },
+    {
+      "case": "classic_edn_named_bindings_two_engines",
+      "status": "pass",
+      "outputs": {
+        "sqlite": {
+          "sql": "SELECT \"o\".\"customer_id\" AS \"customer_id\", SUM(\"o\".\"amount\") AS \"revenue\" FROM orders AS \"o\" WHERE \"o\".\"status\" = :status GROUP BY \"o\".\"customer_id\" ORDER BY \"o\".\"customer_id\"",
+          "rows": [
+            [
+              1,
+              23.0
+            ],
+            [
+              3,
+              65.0
+            ],
+            [
+              6,
+              8.0
+            ],
+            [
+              7,
+              26.0
+            ],
+            [
+              8,
+              45.0
+            ],
+            [
+              12,
+              4.0
+            ],
+            [
+              13,
+              26.0
+            ],
+            [
+              16,
+              12.0
+            ],
+            [
+              18,
+              29.0
+            ],
+            [
+              19,
+              3.0
+            ],
+            [
+              20,
+              15.0
+            ],
+            [
+              22,
+              29.0
+            ],
+            [
+              25,
+              24.0
+            ],
+            [
+              26,
+              8.0
+            ],
+            [
+              27,
+              3.0
+            ],
+            [
+              28,
+              3.0
+            ],
+            [
+              30,
+              28.0
+            ],
+            [
+              31,
+              18.0
+            ],
+            [
+              32,
+              30.0
+            ],
+            [
+              33,
+              14.0
+            ],
+            [
+              34,
+              3.0
+            ],
+            [
+              35,
+              15.0
+            ],
+            [
+              36,
+              28.0
+            ],
+            [
+              38,
+              15.0
+            ],
+            [
+              39,
+              10.0
+            ],
+            [
+              42,
+              22.0
+            ],
+            [
+              50,
+              47.0
+            ],
+            [
+              51,
+              99.0
+            ],
+            [
+              53,
+              39.0
+            ],
+            [
+              54,
+              41.0
+            ],
+            [
+              57,
+              26.0
+            ],
+            [
+              59,
+              1.0
+            ],
+            [
+              63,
+              16.0
+            ],
+            [
+              64,
+              17.0
+            ],
+            [
+              66,
+              11.0
+            ],
+            [
+              69,
+              32.0
+            ],
+            [
+              70,
+              29.0
+            ],
+            [
+              71,
+              44.0
+            ],
+            [
+              79,
+              27.0
+            ],
+            [
+              80,
+              29.0
+            ],
+            [
+              84,
+              19.0
+            ],
+            [
+              85,
+              9.0
+            ],
+            [
+              86,
+              8.0
+            ],
+            [
+              88,
+              16.0
+            ],
+            [
+              92,
+              17.0
+            ],
+            [
+              93,
+              2.0
+            ],
+            [
+              94,
+              24.0
+            ],
+            [
+              99,
+              44.0
+            ]
+          ]
+        },
+        "duckdb": {
+          "sql": "SELECT \"o\".\"customer_id\" AS \"customer_id\", SUM(\"o\".\"amount\") AS \"revenue\" FROM orders AS \"o\" WHERE \"o\".\"status\" = $status GROUP BY \"o\".\"customer_id\" ORDER BY \"o\".\"customer_id\"",
+          "rows": [
+            [
+              1,
+              23.0
+            ],
+            [
+              3,
+              65.0
+            ],
+            [
+              6,
+              8.0
+            ],
+            [
+              7,
+              26.0
+            ],
+            [
+              8,
+              45.0
+            ],
+            [
+              12,
+              4.0
+            ],
+            [
+              13,
+              26.0
+            ],
+            [
+              16,
+              12.0
+            ],
+            [
+              18,
+              29.0
+            ],
+            [
+              19,
+              3.0
+            ],
+            [
+              20,
+              15.0
+            ],
+            [
+              22,
+              29.0
+            ],
+            [
+              25,
+              24.0
+            ],
+            [
+              26,
+              8.0
+            ],
+            [
+              27,
+              3.0
+            ],
+            [
+              28,
+              3.0
+            ],
+            [
+              30,
+              28.0
+            ],
+            [
+              31,
+              18.0
+            ],
+            [
+              32,
+              30.0
+            ],
+            [
+              33,
+              14.0
+            ],
+            [
+              34,
+              3.0
+            ],
+            [
+              35,
+              15.0
+            ],
+            [
+              36,
+              28.0
+            ],
+            [
+              38,
+              15.0
+            ],
+            [
+              39,
+              10.0
+            ],
+            [
+              42,
+              22.0
+            ],
+            [
+              50,
+              47.0
+            ],
+            [
+              51,
+              99.0
+            ],
+            [
+              53,
+              39.0
+            ],
+            [
+              54,
+              41.0
+            ],
+            [
+              57,
+              26.0
+            ],
+            [
+              59,
+              1.0
+            ],
+            [
+              63,
+              16.0
+            ],
+            [
+              64,
+              17.0
+            ],
+            [
+              66,
+              11.0
+            ],
+            [
+              69,
+              32.0
+            ],
+            [
+              70,
+              29.0
+            ],
+            [
+              71,
+              44.0
+            ],
+            [
+              79,
+              27.0
+            ],
+            [
+              80,
+              29.0
+            ],
+            [
+              84,
+              19.0
+            ],
+            [
+              85,
+              9.0
+            ],
+            [
+              86,
+              8.0
+            ],
+            [
+              88,
+              16.0
+            ],
+            [
+              92,
+              17.0
+            ],
+            [
+              93,
+              2.0
+            ],
+            [
+              94,
+              24.0
+            ],
+            [
+              99,
+              44.0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "case": "classic_restart_revalidation",
+      "status": "pass",
+      "rows": 48
+    }
+  ]
+}

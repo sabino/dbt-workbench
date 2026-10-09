@@ -1,0 +1,125 @@
+{
+  "versions": {
+    "sqlmesh": "0.236.3",
+    "dbt-core": "1.12.5",
+    "dbt-duckdb": "1.11.0",
+    "sqlglot": "30.8.0",
+    "duckdb": "1.5.6"
+  },
+  "project": "/tmp/workbench-spikes/unconventional/sqlmesh-dbt-project",
+  "checks": [
+    {
+      "name": "dbt_import_seed_ref_generic_tests_and_build",
+      "pass": true
+    },
+    {
+      "name": "dev_isolation",
+      "pass": true
+    },
+    {
+      "name": "unchanged_upstream_physical_table_reused",
+      "pass": true
+    },
+    {
+      "name": "changed_model_gets_new_physical_table",
+      "pass": true
+    }
+  ],
+  "models": [
+    "\"mesh\".\"analytics\".\"revenue\"",
+    "\"mesh\".\"analytics\".\"orders\""
+  ],
+  "prod_physical_tables": {
+    "\"mesh\".\"analytics\".\"revenue\"": "mesh.sqlmesh__analytics.analytics__revenue__884958492",
+    "\"mesh\".\"analytics\".\"orders\"": "mesh.sqlmesh__analytics.analytics__orders__1815735979"
+  },
+  "prod_rows_before": [
+    {
+      "customer_id": 1,
+      "revenue": 25
+    },
+    {
+      "customer_id": 2,
+      "revenue": 7
+    }
+  ],
+  "dev_physical_tables": {
+    "\"mesh\".\"analytics\".\"revenue\"": "mesh.sqlmesh__analytics.analytics__revenue__2374063670",
+    "\"mesh\".\"analytics\".\"orders\"": "mesh.sqlmesh__analytics.analytics__orders__1815735979"
+  },
+  "prod_rows_after": [
+    {
+      "customer_id": 1,
+      "revenue": 25
+    },
+    {
+      "customer_id": 2,
+      "revenue": 7
+    }
+  ],
+  "dev_rows": [
+    {
+      "customer_id": 1,
+      "revenue": 50
+    },
+    {
+      "customer_id": 2,
+      "revenue": 14
+    }
+  ],
+  "state_tables": [
+    {
+      "table_schema": "analytics",
+      "table_name": "orders"
+    },
+    {
+      "table_schema": "analytics",
+      "table_name": "revenue"
+    },
+    {
+      "table_schema": "analytics__dev",
+      "table_name": "orders"
+    },
+    {
+      "table_schema": "analytics__dev",
+      "table_name": "revenue"
+    },
+    {
+      "table_schema": "sqlmesh",
+      "table_name": "_auto_restatements"
+    },
+    {
+      "table_schema": "sqlmesh",
+      "table_name": "_environment_statements"
+    },
+    {
+      "table_schema": "sqlmesh",
+      "table_name": "_environments"
+    },
+    {
+      "table_schema": "sqlmesh",
+      "table_name": "_intervals"
+    },
+    {
+      "table_schema": "sqlmesh",
+      "table_name": "_snapshots"
+    },
+    {
+      "table_schema": "sqlmesh",
+      "table_name": "_versions"
+    },
+    {
+      "table_schema": "sqlmesh__analytics",
+      "table_name": "analytics__orders__1815735979"
+    },
+    {
+      "table_schema": "sqlmesh__analytics",
+      "table_name": "analytics__revenue__2374063670"
+    },
+    {
+      "table_schema": "sqlmesh__analytics",
+      "table_name": "analytics__revenue__884958492"
+    }
+  ],
+  "rendered_dev": "SELECT \"orders\".\"customer_id\" AS \"customer_id\", SUM(\"orders\".\"amount\") * 2 AS \"revenue\" FROM \"mesh\".\"sqlmesh__analytics\".\"analytics__orders__1815735979\" AS \"orders\" /* mesh.analytics.orders */ WHERE \"orders\".\"status\" = 'completed' GROUP BY \"orders\".\"customer_id\""
+}

@@ -1,0 +1,140 @@
+{
+  "versions": {
+    "sqlmesh": "0.236.3",
+    "dbt-core": "1.12.5",
+    "dbt-duckdb": "1.11.0",
+    "sqlglot": "30.8.0",
+    "duckdb": "1.5.6"
+  },
+  "source_project": "/tmp/workbench-spikes/jaffle-shop-classic",
+  "project": "/tmp/workbench-spikes/unconventional/sqlmesh-jaffle-project",
+  "checks": [
+    {
+      "name": "dbt_sqlmesh_row_equivalence_stg_customers",
+      "pass": true,
+      "native_count": 100,
+      "sqlmesh_count": 100,
+      "first_difference": null
+    },
+    {
+      "name": "dbt_sqlmesh_row_equivalence_stg_orders",
+      "pass": true,
+      "native_count": 99,
+      "sqlmesh_count": 99,
+      "first_difference": null
+    },
+    {
+      "name": "dbt_sqlmesh_row_equivalence_stg_payments",
+      "pass": true,
+      "native_count": 113,
+      "sqlmesh_count": 113,
+      "first_difference": null
+    },
+    {
+      "name": "dbt_sqlmesh_row_equivalence_orders",
+      "pass": true,
+      "native_count": 99,
+      "sqlmesh_count": 99,
+      "first_difference": null
+    },
+    {
+      "name": "dbt_sqlmesh_row_equivalence_customers",
+      "pass": true,
+      "native_count": 100,
+      "sqlmesh_count": 100,
+      "first_difference": null
+    },
+    {
+      "name": "only_customers_snapshot_changes",
+      "pass": true
+    },
+    {
+      "name": "jaffle_development_change_isolated_and_correct",
+      "pass": true,
+      "row_count": 100
+    }
+  ],
+  "dbt_exit_code": 0,
+  "dbt_result_counts": {
+    "pass": 20,
+    "success": 8
+  },
+  "models": [
+    "\"mesh\".\"analytics\".\"customers\"",
+    "\"mesh\".\"analytics\".\"orders\"",
+    "\"mesh\".\"analytics\".\"stg_customers\"",
+    "\"mesh\".\"analytics\".\"stg_orders\"",
+    "\"mesh\".\"analytics\".\"stg_payments\"",
+    "\"mesh\".\"analytics\".\"raw_customers\"",
+    "\"mesh\".\"analytics\".\"raw_orders\"",
+    "\"mesh\".\"analytics\".\"raw_payments\""
+  ],
+  "model_audits": {
+    "analytics.customers": [
+      "('jaffle_shop.unique_customers_customer_id', {})",
+      "('jaffle_shop.not_null_customers_customer_id', {})"
+    ],
+    "analytics.orders": [
+      "('jaffle_shop.unique_orders_order_id', {})",
+      "('jaffle_shop.not_null_orders_order_id', {})",
+      "('jaffle_shop.not_null_orders_customer_id', {})",
+      "('jaffle_shop.accepted_values_orders_status__placed__shipped__completed__return_pending__returned', {})",
+      "('jaffle_shop.not_null_orders_amount', {})",
+      "('jaffle_shop.not_null_orders_credit_card_amount', {})",
+      "('jaffle_shop.not_null_orders_coupon_amount', {})",
+      "('jaffle_shop.not_null_orders_bank_transfer_amount', {})",
+      "('jaffle_shop.not_null_orders_gift_card_amount', {})"
+    ],
+    "analytics.stg_customers": [
+      "('jaffle_shop.unique_stg_customers_customer_id', {})",
+      "('jaffle_shop.not_null_stg_customers_customer_id', {})"
+    ],
+    "analytics.stg_orders": [
+      "('jaffle_shop.unique_stg_orders_order_id', {})",
+      "('jaffle_shop.not_null_stg_orders_order_id', {})",
+      "('jaffle_shop.accepted_values_stg_orders_status__placed__shipped__completed__return_pending__returned', {})"
+    ],
+    "analytics.stg_payments": [
+      "('jaffle_shop.unique_stg_payments_payment_id', {})",
+      "('jaffle_shop.not_null_stg_payments_payment_id', {})",
+      "('jaffle_shop.accepted_values_stg_payments_payment_method__credit_card__coupon__bank_transfer__gift_card', {})"
+    ],
+    "analytics.raw_customers": [],
+    "analytics.raw_orders": [],
+    "analytics.raw_payments": []
+  },
+  "prod_physical_tables": {
+    "\"mesh\".\"analytics\".\"customers\"": "mesh.sqlmesh__analytics.analytics__customers__902450892",
+    "\"mesh\".\"analytics\".\"orders\"": "mesh.sqlmesh__analytics.analytics__orders__451034562",
+    "\"mesh\".\"analytics\".\"stg_customers\"": "mesh.sqlmesh__analytics.analytics__stg_customers__1446976564",
+    "\"mesh\".\"analytics\".\"stg_orders\"": "mesh.sqlmesh__analytics.analytics__stg_orders__2814640780",
+    "\"mesh\".\"analytics\".\"stg_payments\"": "mesh.sqlmesh__analytics.analytics__stg_payments__2837918351",
+    "\"mesh\".\"analytics\".\"raw_customers\"": "mesh.sqlmesh__analytics.analytics__raw_customers__1969022328",
+    "\"mesh\".\"analytics\".\"raw_orders\"": "mesh.sqlmesh__analytics.analytics__raw_orders__2937868456",
+    "\"mesh\".\"analytics\".\"raw_payments\"": "mesh.sqlmesh__analytics.analytics__raw_payments__2587623161"
+  },
+  "dev_physical_tables": {
+    "\"mesh\".\"analytics\".\"stg_customers\"": "mesh.sqlmesh__analytics.analytics__stg_customers__1446976564",
+    "\"mesh\".\"analytics\".\"stg_orders\"": "mesh.sqlmesh__analytics.analytics__stg_orders__2814640780",
+    "\"mesh\".\"analytics\".\"stg_payments\"": "mesh.sqlmesh__analytics.analytics__stg_payments__2837918351",
+    "\"mesh\".\"analytics\".\"customers\"": "mesh.sqlmesh__analytics.analytics__customers__3536638592",
+    "\"mesh\".\"analytics\".\"orders\"": "mesh.sqlmesh__analytics.analytics__orders__451034562",
+    "\"mesh\".\"analytics\".\"raw_customers\"": "mesh.sqlmesh__analytics.analytics__raw_customers__1969022328",
+    "\"mesh\".\"analytics\".\"raw_orders\"": "mesh.sqlmesh__analytics.analytics__raw_orders__2937868456",
+    "\"mesh\".\"analytics\".\"raw_payments\"": "mesh.sqlmesh__analytics.analytics__raw_payments__2587623161"
+  },
+  "reused_models": [
+    "\"mesh\".\"analytics\".\"orders\"",
+    "\"mesh\".\"analytics\".\"stg_customers\"",
+    "\"mesh\".\"analytics\".\"stg_orders\"",
+    "\"mesh\".\"analytics\".\"stg_payments\"",
+    "\"mesh\".\"analytics\".\"raw_customers\"",
+    "\"mesh\".\"analytics\".\"raw_orders\"",
+    "\"mesh\".\"analytics\".\"raw_payments\""
+  ],
+  "changed_models": [
+    "\"mesh\".\"analytics\".\"customers\""
+  ],
+  "source_commit": "fd7bfacae4f497ff044a6a0275268676bf1b64c3",
+  "model_attached_audit_count": 19
+}

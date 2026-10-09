@@ -1,0 +1,26 @@
+{
+  "pass": true,
+  "duckdb": "1.5.6",
+  "concurrent_processes": 3,
+  "final_rows": 3000,
+  "distinct_rows": 3000,
+  "seconds": 0.527,
+  "workers": [
+    {
+      "returncode": 0,
+      "stdout": "{\"worker\": 0, \"observed_rows\": 2000}",
+      "stderr": ""
+    },
+    {
+      "returncode": 0,
+      "stdout": "{\"worker\": 1000, \"observed_rows\": 3000}",
+      "stderr": ""
+    },
+    {
+      "returncode": 0,
+      "stdout": "{\"worker\": 2000, \"observed_rows\": 1000}",
+      "stderr": ""
+    }
+  ],
+  "limitation": "beta protocol; no dbt integration, server recovery, remote cancellation, or OS portability validated"
+}

@@ -1,0 +1,221 @@
+{
+  "cli_version": "dbt-oss 2.0.5",
+  "distribution": "dbt-oss",
+  "synthetic_inputs": true,
+  "no_remote_credentials": true,
+  "classic_commit": "fd7bfacae4f497ff044a6a0275268676bf1b64c3",
+  "results": [
+    {
+      "label": "native_duckdb_build",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/v2-outputs/native_duckdb_build",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/v2-logs/native_duckdb_build"
+      ],
+      "env_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.894,
+      "stdout_excerpt": "   dbt-oss 2.0.5\n   Loading profiles.yml\n Succeeded model main.base (table) [1 of 4 in 0.02s]\n Succeeded model main.child (table) [2 of 4 in 0.01s]\n    Passed test  not_null_child_doubled [3 of 4 in 0.01s]\n    Passed test  unique_child_doubled [4 of 4 in 0.01s]\n\n==================== Execution Summary =====================\nFinished 'build' successfully for target 'dev' [621ms]\nProcessed: 2 models | 2 tests\nSummary: 4 total | 4 success\n",
+      "stderr_excerpt": "",
+      "node_results": [
+        {
+          "unique_id": "model.v2_probe.base",
+          "status": "success",
+          "message": "Succeeded"
+        },
+        {
+          "unique_id": "model.v2_probe.child",
+          "status": "success",
+          "message": "Succeeded"
+        },
+        {
+          "unique_id": "test.v2_probe.not_null_child_doubled.023aa79ff7",
+          "status": "pass",
+          "message": "Pass"
+        },
+        {
+          "unique_id": "test.v2_probe.unique_child_doubled.b7aa75f62e",
+          "status": "pass",
+          "message": "Pass"
+        }
+      ],
+      "compiled": {
+        "child": "select id * 2 as doubled from \"dev\".\"main\".\"base\"",
+        "base": "select 1::integer as id"
+      }
+    },
+    {
+      "label": "native_duckdb_unit_test",
+      "command": [
+        "test",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/v2-outputs/native_duckdb_unit_test",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/v2-logs/native_duckdb_unit_test",
+        "--select",
+        "test_type:unit"
+      ],
+      "env_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.485,
+      "stdout_excerpt": "   dbt-oss 2.0.5\n   Loading profiles.yml\n    Passed unit_test main_dbt_test__audit.child_doubles [1 of 1 in 0.04s]\n\n==================== Execution Summary =====================\nFinished 'test' successfully for target 'dev' [303ms]\nProcessed: 1 unit test\nSummary: 1 total | 1 success\n",
+      "stderr_excerpt": "",
+      "node_results": [
+        {
+          "unique_id": "unit_test.v2_probe.child.child_doubles",
+          "status": "pass",
+          "message": "Pass"
+        }
+      ],
+      "compiled": {
+        "child_doubles": "-- Build actual result given inputs\nWITH\n            \tdev_main_base as (SELECT CAST(3 AS integer) AS id),\n  \tdev_main_child_expect as (SELECT CAST(6 AS integer) AS doubled),\n  \tdev_main_child_actual as (select id * 2 as doubled from dev_main_base\n)\n        SELECT * FROM (\n        (SELECT doubled, 'actual' AS actual_or_expected FROM dev_main_child_actual)\n        UNION ALL\n        (SELECT doubled, 'expected' AS actual_or_expected FROM dev_main_child_expect)\n        ) unit_test_diff\n        ORDER BY doubled",
+        "child": "select id * 2 as doubled from \"dev\".\"main\".\"base\""
+      }
+    },
+    {
+      "label": "local_unit_gate_no_optin",
+      "command": [
+        "test",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/v2-outputs/local_unit_gate_no_optin",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/v2-logs/local_unit_gate_no_optin",
+        "--select",
+        "test_type:unit"
+      ],
+      "env_overrides": {},
+      "exit_code": 1,
+      "elapsed_seconds": 0.293,
+      "stdout_excerpt": "   dbt-oss 2.0.5\n   Loading profiles.yml\n\n==================== Execution Summary =====================\nFinished 'test' with 1 error for target 'dev' [116ms]\n",
+      "stderr_excerpt": "\n=================== Errors and Warnings ====================\n[error] [InvalidConfig (dbt1005)]: Running an individual unit test on local compute is experimental and not yet supported. To use it, set the environment variable DBT_ENGINE_EXPERIMENTAL_LOCAL_UNIT_TESTS=true. Note that experimental features may be unstable and are not yet recommended for production use.\n  --> models/schema.yml\n"
+    },
+    {
+      "label": "local_unit_optin_duckdb",
+      "command": [
+        "test",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/v2-outputs/local_unit_optin_duckdb",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/v2-logs/local_unit_optin_duckdb",
+        "--select",
+        "test_type:unit"
+      ],
+      "env_overrides": {
+        "DBT_ENGINE_EXPERIMENTAL_LOCAL_UNIT_TESTS": "true"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 0.472,
+      "stdout_excerpt": "   dbt-oss 2.0.5\n   Loading profiles.yml\n    Failed unit_test main_dbt_test__audit.child_doubles (models/schema.yml:10:11) [1 of 1 in 0.03s]\n\n==================== Execution Summary =====================\nFinished 'test' successfully for target 'dev' [272ms]\nProcessed: 1 unit test\nSummary: 1 total | 1 error\n",
+      "stderr_excerpt": "",
+      "node_results": [
+        {
+          "unique_id": "unit_test.v2_probe.child.child_doubles",
+          "status": "error",
+          "message": "Error"
+        }
+      ],
+      "compiled": {
+        "child_doubles": "-- Build actual result given inputs\nWITH\n            \tdev_main_base as (SELECT CAST(3 AS integer) AS id),\n  \tdev_main_child_expect as (SELECT CAST(6 AS integer) AS doubled),\n  \tdev_main_child_actual as (select id * 2 as doubled from dev_main_base\n)\n        SELECT * FROM (\n        (SELECT doubled, 'actual' AS actual_or_expected FROM dev_main_child_actual)\n        UNION ALL\n        (SELECT doubled, 'expected' AS actual_or_expected FROM dev_main_child_expect)\n        ) unit_test_diff\n        ORDER BY doubled",
+        "child": "select id * 2 as doubled from \"dev\".\"main\".\"base\""
+      }
+    },
+    {
+      "label": "multi_adapter_gate_no_optin",
+      "command": [
+        "parse",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/v2-outputs/multi_adapter_gate_no_optin",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/v2-logs/multi_adapter_gate_no_optin",
+        "--select",
+        "child"
+      ],
+      "env_overrides": {},
+      "exit_code": 1,
+      "elapsed_seconds": 0.32,
+      "stdout_excerpt": "   dbt-oss 2.0.5\n   Loading profiles.yml\n\n==================== Execution Summary =====================\nFinished 'parse' with 1 error for target 'dev' [149ms]\n",
+      "stderr_excerpt": "\n=================== Errors and Warnings ====================\n[error] [InvalidConfig (dbt1005)]: Selecting a node's adapter with `adapter: duckdb` is experimental and not yet supported. To use it, set the environment variable DBT_ENGINE_EXPERIMENTAL_MULTI_ADAPTER=true. Note that experimental features may be unstable and are not yet recommended for production use.\n  --> models/alternate.sql\n"
+    },
+    {
+      "label": "multi_adapter_optin_parse",
+      "command": [
+        "parse",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/v2-outputs/multi_adapter_optin_parse",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/v2-logs/multi_adapter_optin_parse",
+        "--select",
+        "child"
+      ],
+      "env_overrides": {
+        "DBT_ENGINE_EXPERIMENTAL_MULTI_ADAPTER": "true"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 0.553,
+      "stdout_excerpt": "   dbt-oss 2.0.5\n   Loading profiles.yml\n\n==================== Execution Summary =====================\nFinished 'parse' successfully for target 'dev' [377ms]\n",
+      "stderr_excerpt": ""
+    },
+    {
+      "label": "classic_repository_version_gate",
+      "command": [
+        "parse",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/classic-v2-check",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/v2-project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/v2-outputs/classic_repository_version_gate",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/v2-logs/classic_repository_version_gate",
+        "--profile",
+        "v2_probe"
+      ],
+      "env_overrides": {},
+      "exit_code": 1,
+      "elapsed_seconds": 0.814,
+      "stdout_excerpt": "   dbt-oss 2.0.5\n   Loading ../v2-project/profiles.yml\nsuggestion: Run 'dbt deps' to see the latest fusion compatible packages. For compatibility errors, try the autofix script: https://github.com/dbt-labs/dbt-autofix\n\n==================== Execution Summary =====================\nFinished 'parse' with 6 errors for target 'dev' [437ms]\n",
+      "stderr_excerpt": "\n=================== Errors and Warnings ====================\n[error] [SerializationError (dbt1013)]: Invalid model definition `jaffle_shop.materialized`: Unrecognized key `jaffle_shop.materialized`. Custom keys must go under `+meta`.\n  --> classic-v2-check/dbt_project.yml:24:21\n[error] [SerializationError (dbt1013)]: Invalid model definition `jaffle_shop.staging.materialized`: Unrecognized key `jaffle_shop.staging.materialized`. Custom keys must go under `+meta`.\n  --> classic-v2-check/dbt_project.yml:26:23\n[error] [DbtYamlValidationError (dbt1159)]: Deprecated test arguments: [\"field\", \"to\"] at top-level detected. Please migrate to the new format under the 'arguments' field: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation.\n  --> classic-v2-check/models/schema.yml:48:22\n[error] [DbtYamlValidationError (dbt1159)]: Deprecated test arguments: [\"values\"] at top-level detected. Please migrate to the new format under the 'arguments' field: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation.\n  --> classic-v2-check/models/schema.yml:57:23\n[error] [DbtYamlValidationError (dbt1159)]: Deprecated test arguments: [\"values\"] at top-level detected. Please migrate to the new format under the 'arguments' field: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation.\n  --> classic-v2-check/models/staging/schema.yml:20:23\n[error] [DbtYamlValidationError (dbt1159)]: Deprecated test arguments: [\"values\"] at top-level detected. Please migrate to the new format under the 'arguments' field: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation.\n  --> classic-v2-check/models/staging/schema.yml:31:23\n"
+    }
+  ],
+  "limitations": "No remote warehouse or cross-engine adapter execution was attempted; local compute and adapter-config probes assess explicit capability gates only."
+}

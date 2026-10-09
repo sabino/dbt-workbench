@@ -1,0 +1,20 @@
+(require '[metabase.app-db.connection-pool-setup :as pools])
+(def appdb-connection-attempts (atom 0))
+(def suppressed-pools (atom []))
+(def forbidden-datasource
+  (reify javax.sql.DataSource
+    (getConnection [_] (swap! appdb-connection-attempts inc) (throw (ex-info "APP_DB_CONNECTION_FORBIDDEN" {})))
+    (getConnection [_ _ _] (swap! appdb-connection-attempts inc) (throw (ex-info "APP_DB_CONNECTION_FORBIDDEN" {})))
+    (getLogWriter [_] nil)
+    (setLogWriter [_ _] nil)
+    (setLoginTimeout [_ _] nil)
+    (getLoginTimeout [_] 0)
+    (getParentLogger [_] (java.util.logging.Logger/getGlobal))
+    (unwrap [_ _] (throw (UnsupportedOperationException.)))
+    (isWrapperFor [_ _] false)))
+(with-redefs [pools/connection-pool-data-source (fn [& _] (swap! suppressed-pools conj "application") forbidden-datasource)
+              pools/quartz-connection-pool-data-source (fn [& _] (swap! suppressed-pools conj "quartz") forbidden-datasource)]
+  (load-file "compiler_spike.clj"))
+(spit "bootstrap.json" (cheshire.core/generate-string {:app_db_connection_attempts @appdb-connection-attempts :suppressed_pools @suppressed-pools}))
+(println :APP_DB_CONNECTION_ATTEMPTS @appdb-connection-attempts)
+(shutdown-agents)

@@ -1,0 +1,64 @@
+{
+  "versions": {
+    "sqlmesh": "0.236.3",
+    "dbt-core": "1.12.5",
+    "dbt-duckdb": "1.11.0",
+    "duckdb": "1.5.6"
+  },
+  "project": "/tmp/workbench-spikes/unconventional/sqlmesh-incremental-project",
+  "native_first_rows": [
+    [
+      1,
+      5
+    ],
+    [
+      2,
+      7
+    ]
+  ],
+  "imported_model_kind": {
+    "analytics.inc": "IncrementalByUniqueKeyKind<on_destructive_change: OnDestructiveChange.IGNORE, on_additive_change: OnAdditiveChange.IGNORE, dialect: duckdb, lookback: 1, forward_only: True, unique_key: [Column(\n  this=Identifier(this='id', quoted=True))]>",
+    "analytics.inputs": "SeedKind<path: /tmp/workbench-spikes/unconventional/sqlmesh-incremental-project/seeds/inputs.csv, csv_settings: CsvSettings<delimiter: ,, na_values: [' '], keep_default_na: True>>"
+  },
+  "sqlmesh_first_rows": [
+    [
+      1,
+      5
+    ],
+    [
+      2,
+      7
+    ]
+  ],
+  "native_second_rows": [
+    [
+      1,
+      5
+    ],
+    [
+      1,
+      5
+    ],
+    [
+      2,
+      7
+    ],
+    [
+      2,
+      7
+    ]
+  ],
+  "sqlmesh_second_run_status": "CompletionStatus.SUCCESS",
+  "sqlmesh_second_rows": [
+    [
+      1,
+      5
+    ],
+    [
+      2,
+      7
+    ]
+  ],
+  "initial_equivalent": true,
+  "second_run_equivalent": false
+}

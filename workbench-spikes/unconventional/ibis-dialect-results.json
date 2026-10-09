@@ -1,0 +1,170 @@
+[
+  {
+    "dialect": "hive",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect hive"
+  },
+  {
+    "dialect": "mysql",
+    "compiled": true
+  },
+  {
+    "dialect": "presto",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect presto"
+  },
+  {
+    "dialect": "trino",
+    "compiled": true
+  },
+  {
+    "dialect": "athena",
+    "compiled": true
+  },
+  {
+    "dialect": "bigquery",
+    "compiled": true
+  },
+  {
+    "dialect": "clickhouse",
+    "compiled": true
+  },
+  {
+    "dialect": "spark2",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect spark2"
+  },
+  {
+    "dialect": "spark",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect spark"
+  },
+  {
+    "dialect": "databricks",
+    "compiled": true
+  },
+  {
+    "dialect": "dax",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect dax"
+  },
+  {
+    "dialect": "doris",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect doris"
+  },
+  {
+    "dialect": "dremio",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect dremio"
+  },
+  {
+    "dialect": "drill",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect drill"
+  },
+  {
+    "dialect": "druid",
+    "compiled": true
+  },
+  {
+    "dialect": "duckdb",
+    "compiled": true
+  },
+  {
+    "dialect": "dune",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect dune"
+  },
+  {
+    "dialect": "exasol",
+    "compiled": true
+  },
+  {
+    "dialect": "tsql",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect tsql"
+  },
+  {
+    "dialect": "fabric",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect fabric"
+  },
+  {
+    "dialect": "postgres",
+    "compiled": true
+  },
+  {
+    "dialect": "materialize",
+    "compiled": true
+  },
+  {
+    "dialect": "oracle",
+    "compiled": true
+  },
+  {
+    "dialect": "prql",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect prql"
+  },
+  {
+    "dialect": "redshift",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect redshift"
+  },
+  {
+    "dialect": "risingwave",
+    "compiled": true
+  },
+  {
+    "dialect": "singlestore",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect singlestore"
+  },
+  {
+    "dialect": "snowflake",
+    "compiled": true
+  },
+  {
+    "dialect": "solr",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect solr"
+  },
+  {
+    "dialect": "sqlite",
+    "compiled": true
+  },
+  {
+    "dialect": "starrocks",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect starrocks"
+  },
+  {
+    "dialect": "tableau",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect tableau"
+  },
+  {
+    "dialect": "teradata",
+    "compiled": false,
+    "error_type": "ValueError",
+    "error": "Unknown dialect teradata"
+  }
+]

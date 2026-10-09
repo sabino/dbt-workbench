@@ -1,0 +1,9 @@
+{
+  "state": "interrupted",
+  "exception": "InterruptException",
+  "thread_stopped": true,
+  "interrupt_ms": 1.5,
+  "connection_reusable": true,
+  "pass": true,
+  "duckdb": "1.5.6"
+}

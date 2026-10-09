@@ -1,0 +1,38 @@
+# Python environments, caches, and packages
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Frontend dependencies and compiler cache; released assets are tracked
+node_modules/
+.shadow-cljs/
+
+# dbt runtime artifacts and dependencies
+**/target/
+**/logs/
+**/dbt_packages/
+**/dbt_modules/
+
+# Local credentials and workbench data
+.env
+.env.*
+!.env.example
+**/profiles.yml
+.workbench/
+workbench-data/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Editor and OS files
+.DS_Store

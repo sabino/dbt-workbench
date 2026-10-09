@@ -1,0 +1,1290 @@
+{
+  "version" : "v0.64.1",
+  "commit" : "7010f2797355cb04f2bc2e82e747eaa86357a315",
+  "app_db_provider_forbidden" : true,
+  "results" : [ {
+    "case" : "select_filter_limit",
+    "engine" : "postgres",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 107.618997,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"total\" > 10 LIMIT 20",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "aggregate_month",
+    "engine" : "postgres",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 33.285968,
+    "output" : {
+      "query" : "SELECT DATE_TRUNC('month', \"main\".\"orders\".\"created_at\") AS \"created_at\", SUM(\"main\".\"orders\".\"total\") AS \"sum\" FROM \"main\".\"orders\" GROUP BY DATE_TRUNC('month', \"main\".\"orders\".\"created_at\") ORDER BY DATE_TRUNC('month', \"main\".\"orders\".\"created_at\") ASC",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "implicit_select",
+    "engine" : "postgres",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 16.343374,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\", \"main\".\"orders\".\"created_at\" AS \"created_at\", \"main\".\"orders\".\"customer_id\" AS \"customer_id\", \"main\".\"orders\".\"status\" AS \"status\" FROM \"main\".\"orders\" LIMIT 3",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "parameter_string",
+    "engine" : "postgres",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 16.677764,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"status\" = ? LIMIT 1048575",
+      "params" : [ "shipped" ]
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "join_customer",
+    "engine" : "postgres",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 56.864796,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"Customers\".\"name\" AS \"Customers__name\" FROM \"main\".\"orders\" LEFT JOIN (SELECT \"main\".\"customers\".\"id\" AS \"id\", \"main\".\"customers\".\"name\" AS \"name\" FROM \"main\".\"customers\") AS \"Customers\" ON \"main\".\"orders\".\"customer_id\" = \"Customers\".\"id\" LIMIT 1048575",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100, 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100, 200 ]
+      }
+    } ]
+  }, {
+    "case" : "unknown_field",
+    "engine" : "postgres",
+    "mode" : "full_compile",
+    "status" : "failure",
+    "error" : "class clojure.lang.ExceptionInfo: Error preprocessing query in #'metabase.query-processor.middleware.resolve-fields/resolve-fields: Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database",
+    "chain" : [ {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Error preprocessing query in #'metabase.query-processor.middleware.resolve-fields/resolve-fields: Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    }, {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    }, {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    } ],
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 999 ]
+      }
+    } ]
+  }, {
+    "case" : "native_passthrough",
+    "engine" : "postgres",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 1.961607,
+    "output" : {
+      "lib/type" : "mbql.stage/native",
+      "query" : "SELECT DATE_TRUNC('month', created_at) FROM main.orders"
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    } ]
+  }, {
+    "case" : "select_filter_limit",
+    "engine" : "postgres",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 13.725646,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"total\" > 10 LIMIT 20",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "aggregate_month",
+    "engine" : "postgres",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 13.998798,
+    "output" : {
+      "query" : "SELECT DATE_TRUNC('month', \"main\".\"orders\".\"created_at\") AS \"created_at\", SUM(\"main\".\"orders\".\"total\") AS \"sum\" FROM \"main\".\"orders\" GROUP BY DATE_TRUNC('month', \"main\".\"orders\".\"created_at\") ORDER BY DATE_TRUNC('month', \"main\".\"orders\".\"created_at\") ASC",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "implicit_select",
+    "engine" : "postgres",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 10.703924,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\", \"main\".\"orders\".\"created_at\" AS \"created_at\", \"main\".\"orders\".\"customer_id\" AS \"customer_id\", \"main\".\"orders\".\"status\" AS \"status\" FROM \"main\".\"orders\" LIMIT 3",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "parameter_string",
+    "engine" : "postgres",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 8.924962,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"status\" = ?",
+      "params" : [ "shipped" ]
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "join_customer",
+    "engine" : "postgres",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 17.196973,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"Customers\".\"name\" AS \"Customers__name\" FROM \"main\".\"orders\" LEFT JOIN (SELECT \"main\".\"customers\".\"id\" AS \"id\", \"main\".\"customers\".\"name\" AS \"name\" FROM \"main\".\"customers\") AS \"Customers\" ON \"main\".\"orders\".\"customer_id\" = \"Customers\".\"id\"",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100, 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100, 200 ]
+      }
+    } ]
+  }, {
+    "case" : "unknown_field",
+    "engine" : "postgres",
+    "mode" : "full_compile_no_limit",
+    "status" : "failure",
+    "error" : "class clojure.lang.ExceptionInfo: Error preprocessing query in #'metabase.query-processor.middleware.resolve-fields/resolve-fields: Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database",
+    "chain" : [ {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Error preprocessing query in #'metabase.query-processor.middleware.resolve-fields/resolve-fields: Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    }, {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    }, {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    } ],
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 999 ]
+      }
+    } ]
+  }, {
+    "case" : "native_passthrough",
+    "engine" : "postgres",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 1.595755,
+    "output" : {
+      "lib/type" : "mbql.stage/native",
+      "query" : "SELECT DATE_TRUNC('month', created_at) FROM main.orders"
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    } ]
+  }, {
+    "case" : "select_filter_limit",
+    "engine" : "postgres",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 3.382712,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"total\" > 10 LIMIT 20",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 102 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 102 ]
+      }
+    } ]
+  }, {
+    "case" : "aggregate_month",
+    "engine" : "postgres",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 4.95601,
+    "output" : {
+      "query" : "SELECT DATE_TRUNC('month', \"main\".\"orders\".\"created_at\") AS \"created_at\", SUM(\"main\".\"orders\".\"total\") AS \"sum\" FROM \"main\".\"orders\" GROUP BY DATE_TRUNC('month', \"main\".\"orders\".\"created_at\")",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 103 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 102 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 103 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 102 ]
+      }
+    } ]
+  }, {
+    "case" : "implicit_select",
+    "engine" : "postgres",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 1.972885,
+    "output" : {
+      "query" : "SELECT * FROM \"main\".\"orders\" LIMIT 3",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "parameter_string",
+    "engine" : "postgres",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 2.324515,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"status\" = ?",
+      "params" : [ "shipped" ]
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 105 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 105 ]
+      }
+    } ]
+  }, {
+    "case" : "join_customer",
+    "engine" : "postgres",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 5.099588,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\" FROM \"main\".\"orders\" LEFT JOIN (SELECT * FROM \"main\".\"customers\") AS \"Customers\" ON \"main\".\"orders\".\"customer_id\" = \"Customers\".\"id\"",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 104 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 104 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 201 ]
+      }
+    } ]
+  }, {
+    "case" : "unknown_field",
+    "engine" : "postgres",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 1.91854,
+    "output" : {
+      "query" : "SELECT \"__mb_source\".\"Unknown Field\" AS \"Unknown Field\" FROM \"main\".\"orders\"",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 999 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 999 ]
+      }
+    } ]
+  }, {
+    "case" : "native_passthrough",
+    "engine" : "postgres",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 0.460696,
+    "output" : {
+      "query" : "SELECT DATE_TRUNC('month', created_at) FROM main.orders",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "postgres"
+    } ]
+  }, {
+    "case" : "select_filter_limit",
+    "engine" : "sqlite",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 15.151801,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"total\" > 10 LIMIT 20",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "aggregate_month",
+    "engine" : "sqlite",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 13.56969,
+    "output" : {
+      "query" : "SELECT DATE(\"main\".\"orders\".\"created_at\", 'start of month') AS \"created_at\", SUM(\"main\".\"orders\".\"total\") AS \"sum\" FROM \"main\".\"orders\" GROUP BY DATE(\"main\".\"orders\".\"created_at\", 'start of month') ORDER BY DATE(\"main\".\"orders\".\"created_at\", 'start of month') ASC",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "implicit_select",
+    "engine" : "sqlite",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 8.840557,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\", \"main\".\"orders\".\"created_at\" AS \"created_at\", \"main\".\"orders\".\"customer_id\" AS \"customer_id\", \"main\".\"orders\".\"status\" AS \"status\" FROM \"main\".\"orders\" LIMIT 3",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "parameter_string",
+    "engine" : "sqlite",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 8.273162,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"status\" = ? LIMIT 1048575",
+      "params" : [ "shipped" ]
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "join_customer",
+    "engine" : "sqlite",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 14.494372,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"Customers\".\"name\" AS \"Customers__name\" FROM \"main\".\"orders\" LEFT JOIN (SELECT \"main\".\"customers\".\"id\" AS \"id\", \"main\".\"customers\".\"name\" AS \"name\" FROM \"main\".\"customers\") AS \"Customers\" ON \"main\".\"orders\".\"customer_id\" = \"Customers\".\"id\" LIMIT 1048575",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100, 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100, 200 ]
+      }
+    } ]
+  }, {
+    "case" : "unknown_field",
+    "engine" : "sqlite",
+    "mode" : "full_compile",
+    "status" : "failure",
+    "error" : "class clojure.lang.ExceptionInfo: Error preprocessing query in #'metabase.query-processor.middleware.resolve-fields/resolve-fields: Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database",
+    "chain" : [ {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Error preprocessing query in #'metabase.query-processor.middleware.resolve-fields/resolve-fields: Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    }, {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    }, {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    } ],
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 999 ]
+      }
+    } ]
+  }, {
+    "case" : "native_passthrough",
+    "engine" : "sqlite",
+    "mode" : "full_compile",
+    "status" : "success",
+    "elapsed_ms" : 1.413367,
+    "output" : {
+      "lib/type" : "mbql.stage/native",
+      "query" : "SELECT DATE_TRUNC('month', created_at) FROM main.orders"
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    } ]
+  }, {
+    "case" : "select_filter_limit",
+    "engine" : "sqlite",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 7.848039,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"total\" > 10 LIMIT 20",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "aggregate_month",
+    "engine" : "sqlite",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 12.233339,
+    "output" : {
+      "query" : "SELECT DATE(\"main\".\"orders\".\"created_at\", 'start of month') AS \"created_at\", SUM(\"main\".\"orders\".\"total\") AS \"sum\" FROM \"main\".\"orders\" GROUP BY DATE(\"main\".\"orders\".\"created_at\", 'start of month') ORDER BY DATE(\"main\".\"orders\".\"created_at\", 'start of month') ASC",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "implicit_select",
+    "engine" : "sqlite",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 5.730813,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\", \"main\".\"orders\".\"created_at\" AS \"created_at\", \"main\".\"orders\".\"customer_id\" AS \"customer_id\", \"main\".\"orders\".\"status\" AS \"status\" FROM \"main\".\"orders\" LIMIT 3",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "parameter_string",
+    "engine" : "sqlite",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 6.413989,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"status\" = ?",
+      "params" : [ "shipped" ]
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "join_customer",
+    "engine" : "sqlite",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 14.030189,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"Customers\".\"name\" AS \"Customers__name\" FROM \"main\".\"orders\" LEFT JOIN (SELECT \"main\".\"customers\".\"id\" AS \"id\", \"main\".\"customers\".\"name\" AS \"name\" FROM \"main\".\"customers\") AS \"Customers\" ON \"main\".\"orders\".\"customer_id\" = \"Customers\".\"id\"",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100, 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100, 200 ]
+      }
+    } ]
+  }, {
+    "case" : "unknown_field",
+    "engine" : "sqlite",
+    "mode" : "full_compile_no_limit",
+    "status" : "failure",
+    "error" : "class clojure.lang.ExceptionInfo: Error preprocessing query in #'metabase.query-processor.middleware.resolve-fields/resolve-fields: Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database",
+    "chain" : [ {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Error preprocessing query in #'metabase.query-processor.middleware.resolve-fields/resolve-fields: Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    }, {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Error resolving Fields in query: Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    }, {
+      "class" : "class clojure.lang.ExceptionInfo",
+      "message" : "Failed to fetch :metadata/column 999: either it does not exist, or it belongs to a different Database"
+    } ],
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 999 ]
+      }
+    } ]
+  }, {
+    "case" : "native_passthrough",
+    "engine" : "sqlite",
+    "mode" : "full_compile_no_limit",
+    "status" : "success",
+    "elapsed_ms" : 0.900823,
+    "output" : {
+      "lib/type" : "mbql.stage/native",
+      "query" : "SELECT DATE_TRUNC('month', created_at) FROM main.orders"
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    } ]
+  }, {
+    "case" : "select_filter_limit",
+    "engine" : "sqlite",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 1.832221,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\", \"main\".\"orders\".\"total\" AS \"total\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"total\" > 10 LIMIT 20",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 102 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 102 ]
+      }
+    } ]
+  }, {
+    "case" : "aggregate_month",
+    "engine" : "sqlite",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 37.939083,
+    "output" : {
+      "query" : "SELECT DATE(\"main\".\"orders\".\"created_at\", 'start of month') AS \"created_at\", SUM(\"main\".\"orders\".\"total\") AS \"sum\" FROM \"main\".\"orders\" GROUP BY DATE(\"main\".\"orders\".\"created_at\", 'start of month')",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 103 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 102 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 103 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 102 ]
+      }
+    } ]
+  }, {
+    "case" : "implicit_select",
+    "engine" : "sqlite",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 1.201606,
+    "output" : {
+      "query" : "SELECT * FROM \"main\".\"orders\" LIMIT 3",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    } ]
+  }, {
+    "case" : "parameter_string",
+    "engine" : "sqlite",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 2.175835,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\" FROM \"main\".\"orders\" WHERE \"main\".\"orders\".\"status\" = ?",
+      "params" : [ "shipped" ]
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 105 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 105 ]
+      }
+    } ]
+  }, {
+    "case" : "join_customer",
+    "engine" : "sqlite",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 4.121396,
+    "output" : {
+      "query" : "SELECT \"main\".\"orders\".\"id\" AS \"id\" FROM \"main\".\"orders\" LEFT JOIN (SELECT * FROM \"main\".\"customers\") AS \"Customers\" ON \"main\".\"orders\".\"customer_id\" = \"Customers\".\"id\"",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "table-ids" : [ 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 104 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 101 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 200 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 104 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 201 ]
+      }
+    } ]
+  }, {
+    "case" : "unknown_field",
+    "engine" : "sqlite",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 1.291751,
+    "output" : {
+      "query" : "SELECT \"__mb_source\".\"Unknown Field\" AS \"Unknown Field\" FROM \"main\".\"orders\"",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 999 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/table",
+        "id" : [ 100 ]
+      }
+    }, {
+      "method" : "metadatas",
+      "spec" : {
+        "lib/type" : "metadata/column",
+        "id" : [ 999 ]
+      }
+    } ]
+  }, {
+    "case" : "native_passthrough",
+    "engine" : "sqlite",
+    "mode" : "driver_direct",
+    "status" : "success",
+    "elapsed_ms" : 0.205251,
+    "output" : {
+      "query" : "SELECT DATE_TRUNC('month', created_at) FROM main.orders",
+      "params" : null
+    },
+    "calls" : [ {
+      "method" : "database",
+      "engine" : "sqlite"
+    } ]
+  } ]
+}

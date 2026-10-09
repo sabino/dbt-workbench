@@ -1,0 +1,588 @@
+{
+  "versions": {
+    "dbt-core": "1.12.5",
+    "dbt-duckdb": "1.11.0",
+    "duckdb": "1.5.6"
+  },
+  "synthetic_inputs": true,
+  "no_remote_credentials": true,
+  "project": "/tmp/workbench-spikes/dbt/project",
+  "state_hash_before": "89a9fed5ee6cb0e33c3ef27d86aea1db76a5d3e72ac8f9973a4117f3bc7902f3",
+  "state_hash_after": "89a9fed5ee6cb0e33c3ef27d86aea1db76a5d3e72ac8f9973a4117f3bc7902f3",
+  "checks": {
+    "source_deferral_does_not_replace_current_definition": true,
+    "source_explicit_mapping_resolves_prod": true,
+    "ephemeral_contains_cte_and_prod_ref": true,
+    "default_defer_uses_stale_local": true,
+    "favor_state_uses_saved_prod": true,
+    "selected_modified_parent_builds_local": true,
+    "incremental_first_build_full_sql": true,
+    "incremental_second_build_destination_filter": true,
+    "incremental_second_build_updates_without_duplicates": true,
+    "incremental_tests_pass_both_runs": true,
+    "live_introspection_observes_data": true,
+    "offline_introspection_fails": true,
+    "no_introspect_not_universal_offline_mode": true,
+    "cancel_releases_database": true,
+    "after_cancel_build_succeeds": true,
+    "immutable_state_unchanged": true
+  },
+  "all_checks_passed": true,
+  "results": [
+    {
+      "label": "prod_initial",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "prod",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/prod_initial",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/prod_initial",
+        "--select",
+        "upstream child source_child"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.406,
+      "compiled": {
+        "child": "select id, id * 2 as doubled from \"prod\".\"main\".\"upstream\"",
+        "upstream": "select 100::integer as id",
+        "source_child": "select id from \"prod\".\"raw\".\"events\""
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.source_child",
+          "status": "success",
+          "message": "OK"
+        },
+        {
+          "unique_id": "model.extended_probe.upstream",
+          "status": "success",
+          "message": "OK"
+        },
+        {
+          "unique_id": "model.extended_probe.child",
+          "status": "success",
+          "message": "OK"
+        }
+      ]
+    },
+    {
+      "label": "source_current_definition",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/source_current_definition",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/source_current_definition",
+        "--select",
+        "source_child",
+        "--defer",
+        "--state",
+        "/tmp/workbench-spikes/dbt/project/state/prod",
+        "--favor-state"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.375,
+      "compiled": {
+        "source_child": "select id from \"dev\".\"raw\".\"events\""
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.source_child",
+          "status": "success",
+          "message": "OK"
+        }
+      ],
+      "query_results": {
+        "source_child": [
+          [
+            1000
+          ]
+        ],
+        "local_source": [
+          [
+            1000
+          ]
+        ]
+      }
+    },
+    {
+      "label": "source_explicit_mapping",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/source_explicit_mapping",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/source_explicit_mapping",
+        "--select",
+        "source_child",
+        "--defer",
+        "--state",
+        "/tmp/workbench-spikes/dbt/project/state/prod",
+        "--favor-state",
+        "--vars",
+        "{\"raw_catalog\":\"prod\"}"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.341,
+      "compiled": {
+        "source_child": "select id from \"prod\".\"raw\".\"events\""
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.source_child",
+          "status": "success",
+          "message": "OK"
+        }
+      ],
+      "query_results": {
+        "source_child": [
+          [
+            10
+          ]
+        ]
+      }
+    },
+    {
+      "label": "ephemeral_deferred_physical_parent",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/ephemeral_deferred_physical_parent",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/ephemeral_deferred_physical_parent",
+        "--select",
+        "ephemeral_child",
+        "--defer",
+        "--state",
+        "/tmp/workbench-spikes/dbt/project/state/prod",
+        "--favor-state"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.134,
+      "compiled": {
+        "ephemeral_child": "with __dbt__cte__ephemeral_parent as (\n\nselect id + 1 as id from \"prod\".\"main\".\"upstream\"\n) select id * 2 as doubled from __dbt__cte__ephemeral_parent",
+        "ephemeral_parent": "select id + 1 as id from \"prod\".\"main\".\"upstream\""
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.ephemeral_child",
+          "status": "success",
+          "message": "OK"
+        }
+      ],
+      "query_results": {
+        "ephemeral_child": [
+          [
+            202
+          ]
+        ]
+      }
+    },
+    {
+      "label": "revised_parent_stale_local_default",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/revised_parent_stale_local_default",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/revised_parent_stale_local_default",
+        "--select",
+        "child",
+        "--defer",
+        "--state",
+        "/tmp/workbench-spikes/dbt/project/state/prod"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.998,
+      "compiled": {
+        "child": "select id, id * 2 as doubled from \"dev\".\"main\".\"upstream\""
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.child",
+          "status": "success",
+          "message": "OK"
+        }
+      ],
+      "query_results": {
+        "child": [
+          [
+            7,
+            14
+          ]
+        ]
+      }
+    },
+    {
+      "label": "revised_parent_explicit_state_preference",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/revised_parent_explicit_state_preference",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/revised_parent_explicit_state_preference",
+        "--select",
+        "child",
+        "--defer",
+        "--state",
+        "/tmp/workbench-spikes/dbt/project/state/prod",
+        "--favor-state"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.957,
+      "compiled": {
+        "child": "select id, id * 2 as doubled from \"prod\".\"main\".\"upstream\""
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.child",
+          "status": "success",
+          "message": "OK"
+        }
+      ],
+      "query_results": {
+        "child": [
+          [
+            100,
+            200
+          ]
+        ]
+      }
+    },
+    {
+      "label": "revised_parent_selected",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/revised_parent_selected",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/revised_parent_selected",
+        "--select",
+        "upstream child",
+        "--defer",
+        "--state",
+        "/tmp/workbench-spikes/dbt/project/state/prod",
+        "--favor-state"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.932,
+      "compiled": {
+        "child": "select id, id * 2 as doubled from \"dev\".\"main\".\"upstream\"",
+        "upstream": "select 999::integer as id"
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.upstream",
+          "status": "success",
+          "message": "OK"
+        },
+        {
+          "unique_id": "model.extended_probe.child",
+          "status": "success",
+          "message": "OK"
+        }
+      ],
+      "query_results": {
+        "child": [
+          [
+            999,
+            1998
+          ]
+        ]
+      }
+    },
+    {
+      "label": "incremental_first_build",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/incremental_first_build",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/incremental_first_build",
+        "--select",
+        "incremental_model"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.916,
+      "compiled": {
+        "incremental_model": "select id, value, updated_at from \"dev\".\"raw\".\"changes\""
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.incremental_model",
+          "status": "success",
+          "message": "OK"
+        },
+        {
+          "unique_id": "test.extended_probe.not_null_incremental_model_id.3970f97ada",
+          "status": "pass",
+          "message": null
+        },
+        {
+          "unique_id": "test.extended_probe.unique_incremental_model_id.e8096a5072",
+          "status": "pass",
+          "message": null
+        }
+      ],
+      "query_results": {
+        "incremental": [
+          [
+            1,
+            "a",
+            "2026-01-01 00:00:00"
+          ],
+          [
+            2,
+            "b",
+            "2026-01-02 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "label": "incremental_second_build",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/incremental_second_build",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/incremental_second_build",
+        "--select",
+        "incremental_model"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.351,
+      "compiled": {
+        "incremental_model": "select id, value, updated_at from \"dev\".\"raw\".\"changes\"\n\nwhere updated_at > (select coalesce(max(updated_at), TIMESTAMP '1900-01-01') from \"dev\".\"main\".\"incremental_model\")"
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.incremental_model",
+          "status": "success",
+          "message": "OK"
+        },
+        {
+          "unique_id": "test.extended_probe.not_null_incremental_model_id.3970f97ada",
+          "status": "pass",
+          "message": null
+        },
+        {
+          "unique_id": "test.extended_probe.unique_incremental_model_id.e8096a5072",
+          "status": "pass",
+          "message": null
+        }
+      ],
+      "query_results": {
+        "incremental": [
+          [
+            1,
+            "a",
+            "2026-01-01 00:00:00"
+          ],
+          [
+            2,
+            "bb",
+            "2026-01-03 00:00:00"
+          ],
+          [
+            3,
+            "c",
+            "2026-01-03 00:00:00"
+          ]
+        ]
+      }
+    },
+    {
+      "label": "introspection_live_compile",
+      "command": [
+        "compile",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/introspection_live_compile",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/introspection_live_compile",
+        "--select",
+        "introspective_model"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.658,
+      "compiled": {
+        "introspective_model": "select 1000::integer as seen_at_compile"
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.introspective_model",
+          "status": "success",
+          "message": null
+        }
+      ]
+    },
+    {
+      "label": "introspection_no_data_compile",
+      "command": [
+        "compile",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "offline",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/introspection_no_data_compile",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/introspection_no_data_compile",
+        "--select",
+        "introspective_model"
+      ],
+      "exit_code": 2,
+      "elapsed_seconds": 3.564,
+      "compiled": {},
+      "error_excerpt": "\u001b[0m00:53:53  Running with dbt=1.12.5\n\u001b[0m00:53:53  Registered adapter: duckdb=1.11.0\n\u001b[0m00:53:53  Unable to do partial parsing because saved manifest not found. Starting full parse.\n\u001b[0m00:53:55  Found 8 models, 2 data tests, 2 sources, 500 macros\n\u001b[0m00:53:55  \n\u001b[0m00:53:55  Concurrency: 1 threads (target='offline')\n\u001b[0m00:53:55  \n\u001b[0m00:53:55  [\u001b[31mERROR\u001b[0m]: Encountered an error:\nRuntime Error\n  Runtime Error in model introspective_model (models/introspective_model.sql)\n    Catalog Error: Table with name \"raw.events\" does not exist because schema \"raw\" does not exist.\n    \n    LINE 3:     select max(id) as max_id from \"offline\".\"raw\".\"events\"\n                                              ^\n"
+    },
+    {
+      "label": "introspection_no_introspect_compile",
+      "command": [
+        "compile",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "offline",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/introspection_no_introspect_compile",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/introspection_no_introspect_compile",
+        "--select",
+        "introspective_model",
+        "--no-introspect"
+      ],
+      "exit_code": 2,
+      "elapsed_seconds": 3.734,
+      "compiled": {},
+      "error_excerpt": "\u001b[0m00:53:57  Running with dbt=1.12.5\n\u001b[0m00:53:57  Registered adapter: duckdb=1.11.0\n\u001b[0m00:53:57  Unable to do partial parsing because saved manifest not found. Starting full parse.\n\u001b[0m00:53:58  Found 8 models, 2 data tests, 2 sources, 500 macros\n\u001b[0m00:53:58  \n\u001b[0m00:53:58  Concurrency: 1 threads (target='offline')\n\u001b[0m00:53:58  \n\u001b[0m00:53:59  [\u001b[31mERROR\u001b[0m]: Encountered an error:\nRuntime Error\n  Runtime Error in model introspective_model (models/introspective_model.sql)\n    Connection Error: Connection already closed!\n"
+    },
+    {
+      "label": "cancel_heavy_worker",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/cancel_heavy_worker",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/cancel_heavy_worker",
+        "--select",
+        "long_running_model"
+      ],
+      "started_heavy_materialization": true,
+      "worker_exit_code": -15,
+      "database_reopened": true
+    },
+    {
+      "label": "after_cancel_build",
+      "command": [
+        "build",
+        "--project-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--profiles-dir",
+        "/tmp/workbench-spikes/dbt/project",
+        "--target",
+        "dev",
+        "--target-path",
+        "/tmp/workbench-spikes/dbt/project/outputs/after_cancel_build",
+        "--log-path",
+        "/tmp/workbench-spikes/dbt/project/logs/after_cancel_build",
+        "--select",
+        "child",
+        "--defer",
+        "--state",
+        "/tmp/workbench-spikes/dbt/project/state/prod",
+        "--favor-state"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.979,
+      "compiled": {
+        "child": "select id, id * 2 as doubled from \"prod\".\"main\".\"upstream\""
+      },
+      "node_results": [
+        {
+          "unique_id": "model.extended_probe.child",
+          "status": "success",
+          "message": "OK"
+        }
+      ],
+      "query_results": {
+        "child": [
+          [
+            100,
+            200
+          ]
+        ]
+      }
+    }
+  ]
+}

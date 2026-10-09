@@ -1,0 +1,465 @@
+{
+  "versions": {
+    "ibis-framework": "12.0.0",
+    "sqlglot": "30.21.0",
+    "duckdb": "1.5.6"
+  },
+  "sqlite": "3.53.1",
+  "tests": [
+    {
+      "name": "aggregate_filter",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    \"t1\".\"grp\",\n    SUM(\"t1\".\"amount\") AS \"total\"\n  FROM (\n    SELECT\n      *\n    FROM \"input_data\" AS \"t0\"\n    WHERE\n      \"t0\".\"status\" = 'completed'\n  ) AS \"t1\"\n  GROUP BY\n    1\n) AS \"t2\"\nORDER BY\n  \"t2\".\"grp\" ASC",
+          "rows": [
+            [
+              "a",
+              25
+            ],
+            [
+              "b",
+              7
+            ]
+          ]
+        },
+        "sqlite": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    \"t1\".\"grp\",\n    SUM(\"t1\".\"amount\") AS \"total\"\n  FROM (\n    SELECT\n      *\n    FROM \"input_data\" AS \"t0\"\n    WHERE\n      \"t0\".\"status\" = 'completed'\n  ) AS \"t1\"\n  GROUP BY\n    1\n) AS \"t2\"\nORDER BY\n  \"t2\".\"grp\" ASC NULLS LAST",
+          "rows": [
+            [
+              "a",
+              25
+            ],
+            [
+              "b",
+              7
+            ]
+          ]
+        }
+      },
+      "both_executed": true,
+      "equal_rows": true
+    },
+    {
+      "name": "integer_true_division_nonzero",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  \"t0\".\"numerator\" / \"t0\".\"denominator\" AS \"value\"\nFROM \"input_data\" AS \"t0\"\nWHERE\n  \"t0\".\"denominator\" <> 0\nORDER BY\n  \"t0\".\"id\" ASC",
+          "rows": [
+            [
+              1,
+              1.5
+            ],
+            [
+              2,
+              -1.5
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        },
+        "sqlite": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  CAST(\"t0\".\"numerator\" AS REAL) / \"t0\".\"denominator\" AS \"value\"\nFROM \"input_data\" AS \"t0\"\nWHERE\n  \"t0\".\"denominator\" <> 0\nORDER BY\n  \"t0\".\"id\" ASC NULLS LAST",
+          "rows": [
+            [
+              1,
+              1.5
+            ],
+            [
+              2,
+              -1.5
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        }
+      },
+      "both_executed": true,
+      "equal_rows": true
+    },
+    {
+      "name": "integer_true_division_zero",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  \"t0\".\"numerator\" / \"t0\".\"denominator\" AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC",
+          "rows": [
+            [
+              1,
+              1.5
+            ],
+            [
+              2,
+              -1.5
+            ],
+            [
+              3,
+              "infinity"
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        },
+        "sqlite": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  CAST(\"t0\".\"numerator\" AS REAL) / \"t0\".\"denominator\" AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC NULLS LAST",
+          "rows": [
+            [
+              1,
+              1.5
+            ],
+            [
+              2,
+              -1.5
+            ],
+            [
+              3,
+              null
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        }
+      },
+      "both_executed": true,
+      "equal_rows": false
+    },
+    {
+      "name": "explicit_null_on_zero_division",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  \"t0\".\"numerator\" / NULLIF(\"t0\".\"denominator\", 0) AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC",
+          "rows": [
+            [
+              1,
+              1.5
+            ],
+            [
+              2,
+              -1.5
+            ],
+            [
+              3,
+              null
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        },
+        "sqlite": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  CAST(\"t0\".\"numerator\" AS REAL) / NULLIF(\"t0\".\"denominator\", 0) AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC NULLS LAST",
+          "rows": [
+            [
+              1,
+              1.5
+            ],
+            [
+              2,
+              -1.5
+            ],
+            [
+              3,
+              null
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        }
+      },
+      "both_executed": true,
+      "equal_rows": true
+    },
+    {
+      "name": "month_truncation",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  DATE_TRUNC('MONTH', CAST(\"t0\".\"ts\" AS TIMESTAMP)) AS \"month\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC",
+          "rows": [
+            [
+              1,
+              "2026-10-01 00:00:00"
+            ],
+            [
+              2,
+              "2026-10-01 00:00:00"
+            ],
+            [
+              3,
+              "2026-11-01 00:00:00"
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        },
+        "sqlite": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  DATETIME(STRFTIME('%Y-%m-%d %H:%M:%f', \"t0\".\"ts\"), 'start of month') AS \"month\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC NULLS LAST",
+          "rows": [
+            [
+              1,
+              "2026-10-01 00:00:00"
+            ],
+            [
+              2,
+              "2026-10-01 00:00:00"
+            ],
+            [
+              3,
+              "2026-11-01 00:00:00"
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        }
+      },
+      "both_executed": true,
+      "equal_rows": true
+    },
+    {
+      "name": "window_rank",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    \"t0\".\"id\",\n    ROW_NUMBER() OVER (\n      PARTITION BY \"t0\".\"grp\"\n      ORDER BY \"t0\".\"id\" ASC\n      ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\n    ) - 1 AS \"position\"\n  FROM \"input_data\" AS \"t0\"\n) AS \"t1\"\nORDER BY\n  \"t1\".\"id\" ASC",
+          "rows": [
+            [
+              1,
+              0
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              3,
+              0
+            ],
+            [
+              4,
+              1
+            ]
+          ]
+        },
+        "sqlite": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    \"t0\".\"id\",\n    ROW_NUMBER() OVER (\n      PARTITION BY \"t0\".\"grp\"\n      ORDER BY \"t0\".\"id\" ASC NULLS LAST\n      ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\n    ) - 1 AS \"position\"\n  FROM \"input_data\" AS \"t0\"\n) AS \"t1\"\nORDER BY\n  \"t1\".\"id\" ASC NULLS LAST",
+          "rows": [
+            [
+              1,
+              0
+            ],
+            [
+              2,
+              1
+            ],
+            [
+              3,
+              0
+            ],
+            [
+              4,
+              1
+            ]
+          ]
+        }
+      },
+      "both_executed": true,
+      "equal_rows": true
+    },
+    {
+      "name": "self_join",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    \"t1\".\"id\",\n    \"t1\".\"amount\"\n  FROM \"input_data\" AS \"t1\"\n  INNER JOIN \"input_data\" AS \"t2\"\n    ON \"t1\".\"id\" = \"t2\".\"id\"\n) AS \"t3\"\nORDER BY\n  \"t3\".\"id\" ASC",
+          "rows": [
+            [
+              1,
+              20
+            ],
+            [
+              2,
+              5
+            ],
+            [
+              3,
+              7
+            ],
+            [
+              4,
+              10
+            ]
+          ]
+        },
+        "sqlite": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    \"t1\".\"id\",\n    \"t1\".\"amount\"\n  FROM \"input_data\" AS \"t1\"\n  INNER JOIN \"input_data\" AS \"t2\"\n    ON \"t1\".\"id\" = \"t2\".\"id\"\n) AS \"t3\"\nORDER BY\n  \"t3\".\"id\" ASC NULLS LAST",
+          "rows": [
+            [
+              1,
+              20
+            ],
+            [
+              2,
+              5
+            ],
+            [
+              3,
+              7
+            ],
+            [
+              4,
+              10
+            ]
+          ]
+        }
+      },
+      "both_executed": true,
+      "equal_rows": true
+    },
+    {
+      "name": "literal_escaping",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  \"t0\".\"id\"\nFROM \"input_data\" AS \"t0\"\nWHERE\n  \"t0\".\"status\" = 'completed'' OR 1=1 --'\nORDER BY\n  \"t0\".\"id\" ASC",
+          "rows": []
+        },
+        "sqlite": {
+          "sql": "SELECT\n  \"t0\".\"id\"\nFROM \"input_data\" AS \"t0\"\nWHERE\n  \"t0\".\"status\" = 'completed'' OR 1=1 --'\nORDER BY\n  \"t0\".\"id\" ASC NULLS LAST",
+          "rows": []
+        }
+      },
+      "both_executed": true,
+      "equal_rows": true
+    },
+    {
+      "name": "try_cast",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  TRY_CAST(\"t0\".\"raw_number\" AS BIGINT) AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC",
+          "rows": [
+            [
+              1,
+              3
+            ],
+            [
+              2,
+              null
+            ],
+            [
+              3,
+              4
+            ],
+            [
+              4,
+              null
+            ]
+          ]
+        },
+        "sqlite": {
+          "error_type": "OperationNotDefinedError",
+          "error": "Compilation rule for 'TryCast' operation is not defined"
+        }
+      },
+      "both_executed": false,
+      "equal_rows": false
+    },
+    {
+      "name": "array_length",
+      "engines": {
+        "duckdb": {
+          "sql": "SELECT\n  ARRAY_LENGTH(CAST([1, 2, 3] AS TINYINT[])) AS \"ArrayLength(Array((1, 2, 3)))\"",
+          "rows": [
+            [
+              3
+            ]
+          ]
+        },
+        "sqlite": {
+          "error_type": "OperationNotDefinedError",
+          "error": "Compilation rule for 'Array' operation is not defined"
+        }
+      },
+      "both_executed": false,
+      "equal_rows": false
+    }
+  ],
+  "compile_only": [
+    {
+      "name": "aggregate_filter",
+      "engines": {
+        "postgres": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    \"t1\".\"grp\",\n    SUM(\"t1\".\"amount\") AS \"total\"\n  FROM (\n    SELECT\n      *\n    FROM \"input_data\" AS \"t0\"\n    WHERE\n      \"t0\".\"status\" = 'completed'\n  ) AS \"t1\"\n  GROUP BY\n    1\n) AS \"t2\"\nORDER BY\n  \"t2\".\"grp\" ASC",
+          "status": "compiled_only_no_live_engine_validation"
+        },
+        "snowflake": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    \"t1\".\"grp\",\n    SUM(\"t1\".\"amount\") AS \"total\"\n  FROM (\n    SELECT\n      *\n    FROM \"input_data\" AS \"t0\"\n    WHERE\n      \"t0\".\"status\" = 'completed'\n  ) AS \"t1\"\n  GROUP BY\n    1\n) AS \"t2\"\nORDER BY\n  \"t2\".\"grp\" ASC",
+          "status": "compiled_only_no_live_engine_validation"
+        },
+        "bigquery": {
+          "sql": "SELECT\n  *\nFROM (\n  SELECT\n    `t1`.`grp`,\n    SUM(`t1`.`amount`) AS `total`\n  FROM (\n    SELECT\n      *\n    FROM `input_data` AS `t0`\n    WHERE\n      `t0`.`status` = 'completed'\n  ) AS `t1`\n  GROUP BY\n    1\n) AS `t2`\nORDER BY\n  `t2`.`grp` ASC NULLS LAST",
+          "status": "compiled_only_no_live_engine_validation"
+        }
+      }
+    },
+    {
+      "name": "integer_division",
+      "engines": {
+        "postgres": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  CAST(\"t0\".\"numerator\" AS DOUBLE PRECISION) / \"t0\".\"denominator\" AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC",
+          "status": "compiled_only_no_live_engine_validation"
+        },
+        "snowflake": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  \"t0\".\"numerator\" / \"t0\".\"denominator\" AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC",
+          "status": "compiled_only_no_live_engine_validation"
+        },
+        "bigquery": {
+          "sql": "SELECT\n  `t0`.`id`,\n  ieee_divide(`t0`.`numerator`, `t0`.`denominator`) AS `value`\nFROM `input_data` AS `t0`\nORDER BY\n  `t0`.`id` ASC NULLS LAST",
+          "status": "compiled_only_no_live_engine_validation"
+        }
+      }
+    },
+    {
+      "name": "try_cast",
+      "engines": {
+        "postgres": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  CAST(\"t0\".\"raw_number\" AS BIGINT) AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC",
+          "status": "compiled_only_no_live_engine_validation"
+        },
+        "snowflake": {
+          "sql": "SELECT\n  \"t0\".\"id\",\n  CAST(\"t0\".\"raw_number\" AS BIGINT) AS \"value\"\nFROM \"input_data\" AS \"t0\"\nORDER BY\n  \"t0\".\"id\" ASC",
+          "status": "compiled_only_no_live_engine_validation"
+        },
+        "bigquery": {
+          "sql": "SELECT\n  `t0`.`id`,\n  SAFE_CAST(`t0`.`raw_number` AS INT64) AS `value`\nFROM `input_data` AS `t0`\nORDER BY\n  `t0`.`id` ASC NULLS LAST",
+          "status": "compiled_only_no_live_engine_validation"
+        }
+      }
+    },
+    {
+      "name": "array_length",
+      "engines": {
+        "postgres": {
+          "sql": "SELECT\n  CARDINALITY(ARRAY[1, 2, 3]) AS \"ArrayLength(Array((1, 2, 3)))\"",
+          "status": "compiled_only_no_live_engine_validation"
+        },
+        "snowflake": {
+          "sql": "SELECT\n  ARRAY_SIZE([1, 2, 3]) AS \"ArrayLength(Array((1, 2, 3)))\"",
+          "status": "compiled_only_no_live_engine_validation"
+        },
+        "bigquery": {
+          "sql": "SELECT\n  ARRAY_LENGTH([1, 2, 3]) AS `ArrayLength_Array_1_2_3`",
+          "status": "compiled_only_no_live_engine_validation"
+        }
+      }
+    }
+  ]
+}

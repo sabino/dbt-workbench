@@ -1,0 +1,10 @@
+{:source-paths ["src"]
+ :dependencies [[com.fulcrologic/fulcro "3.10.0"]]
+ :maven {:repositories {"central" {:url "https://repo.maven.apache.org/maven2/"}
+                        "clojars" {:url "https://repo.clojars.org/"}}}
+ :builds {:app {:target :browser
+                :output-dir "../src/dbt_workbench/static/js"
+                :asset-path "/static/js"
+                :modules {:main {:init-fn workbench.core/init}}
+                :compiler-options {:infer-externs :auto}
+                :devtools {:after-load workbench.core/refresh}}}}

@@ -1,0 +1,82 @@
+{
+  "validated_native_boundary": {
+    "engine": "dbt-core 1.12.5 + dbt-duckdb 1.11.0",
+    "evidence": "results.json",
+    "checks_passed": 16,
+    "mode": "dbt owns project parsing, Jinja/macros, ref/source semantics, selection, physical materializations, incremental destination state, tests, and native execution"
+  },
+  "preview_boundary": {
+    "mode": "Workbench owns explicit edge/source bindings, data hydration, SQLGlot translation of compiled SQL, local DuckDB previews, and per-feature reliability classification",
+    "limits": [
+      "Native dbt deferral does not move data or authenticate to a second target",
+      "Offline compilation can fail when macros query missing upstream data",
+      "Local translated SELECT output does not establish materialization or incremental equivalence",
+      "No warehouse credentials or cross-engine live execution tested"
+    ]
+  },
+  "v2_findings": {
+    "engine": "dbt-oss 2.0.5",
+    "evidence": "results_v2.json",
+    "classic_commit": "fd7bfacae4f497ff044a6a0275268676bf1b64c3",
+    "native_duckdb_build_and_fixture_unit_test": "passed",
+    "local_compute_optin_on_duckdb": "unit node error with exit code zero; reproduced",
+    "multi_adapter": "opt-in gate verified; enabled same-adapter parsing passed; no cross-engine execution tested",
+    "classic_repository": "six strict YAML/config compatibility errors; declared <2 version constraint observed but version rejection not shown"
+  },
+  "phase_exit_gates": [
+    {
+      "phase": "Engine and invocation contract",
+      "must_pass": [
+        "Select installed engine satisfying project require-dbt-version",
+        "Treat exit code, structured events, run_results node states, and artifact completeness as one result",
+        "Cancellation releases local resources; separately validate remote adapter cancellation when credentials available"
+      ]
+    },
+    {
+      "phase": "Native dbt workspace",
+      "must_pass": [
+        "Pinned Jaffle Shop baseline/edit/rebuild/tests under isolated development target",
+        "Explicit local-first vs state-first resolution provenance for every ref",
+        "Sources need explicit target/source bindings",
+        "Immutable state snapshots separate from mutable parse/build output"
+      ]
+    },
+    {
+      "phase": "Compiled SQL preview",
+      "must_pass": [
+        "Compile under original adapter and expose macro-introspection requirements",
+        "Materialize/hydrate every selected boundary input locally",
+        "Strict translation fails on unsupported constructs and records original/translated SQL",
+        "Compare preview rows against native results using representative types and null/collation/time semantics"
+      ]
+    },
+    {
+      "phase": "Materializations and production confidence",
+      "must_pass": [
+        "Keep adapter-native incremental/snapshot/hooks execution distinct from SELECT preview",
+        "Verify first/second incremental runs and tests under real supported adapter",
+        "Validate final revision on original target engine before declaring parity"
+      ]
+    },
+    {
+      "phase": "Optional dbt v2 integration",
+      "must_pass": [
+        "Run repository migration compatibility checks before engine switch",
+        "Use capability negotiation; never silently choose experimental local compute/multiadapter",
+        "Assess dbt OSS vs full distribution availability and license constraints",
+        "Revalidate supported target pairs with actual engines rather than parse-only success"
+      ]
+    }
+  ],
+  "sources": [
+    "https://docs.getdbt.com/reference/node-selection/defer",
+    "https://docs.getdbt.com/reference/node-selection/state-comparison-caveats",
+    "https://docs.getdbt.com/reference/dbt-jinja-functions/run_query",
+    "https://docs.getdbt.com/reference/programmatic-invocations",
+    "https://docs.getdbt.com/docs/build/incremental-models",
+    "https://docs.getdbt.com/reference/resource-configs/compute",
+    "https://docs.getdbt.com/docs/dbt-versions/dbt-upgrade/upgrading-to-v2",
+    "https://docs.getdbt.com/blog/comparing-dbt-and-dbt-oss",
+    "https://docs.getdbt.com/docs/local/connect-data-platform/duckdb-setup"
+  ]
+}

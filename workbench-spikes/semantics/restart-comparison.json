@@ -1,0 +1,21 @@
+{
+  "independent_process_revalidation": true,
+  "fresh_connections_per_process": 2,
+  "total_independent_suite_executions": 4,
+  "versions": {
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "sqlglot": "30.21.0",
+    "duckdb": "1.5.6",
+    "numpy": "2.4.3"
+  },
+  "ignored_volatile_fields": [
+    "label",
+    "timing"
+  ],
+  "artifacts": {
+    "semantic_spike.py": "98df89c38dcb76049a2eccbfded18f66fb268646a88250a6cd2852ce27b9a1fc",
+    "results.json": "f6831148a33217c0403d48038b8182129453690a714d2fbc47937e3e43427961",
+    "restart-results.json": "9183baac6d9c595f7e5fcf00726da11942238d8f7d58548508c4655c8ed5a654"
+  }
+}

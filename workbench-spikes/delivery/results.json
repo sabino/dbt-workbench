@@ -1,0 +1,71 @@
+{
+  "job_failure_reconnect": {
+    "pass": true,
+    "seconds": 0.015,
+    "detail": {
+      "exit_code": 7,
+      "persisted_terminal_state": "failed",
+      "event_resume_after": 2,
+      "replayed_event_count": 1
+    }
+  },
+  "cancel_process_tree": {
+    "pass": true,
+    "seconds": 0.193,
+    "detail": {
+      "worker_exit_code": -15,
+      "child_no_longer_running": true,
+      "heartbeat_stopped": true,
+      "cancellation_ms": 121.6,
+      "scope": "Linux process group, no remote query"
+    }
+  },
+  "restart_orphan_reconciliation": {
+    "pass": true,
+    "seconds": 0.003,
+    "detail": {
+      "detected_prior_running_job": true,
+      "orphan_terminated": true,
+      "terminal_state": "interrupted",
+      "limitation": "Real supervisor must verify PID identity to avoid PID reuse"
+    }
+  },
+  "duckdb_process_locks": {
+    "pass": true,
+    "seconds": 0.534,
+    "detail": {
+      "cross_process_readwrite": "rejected_conflicting_lock",
+      "cross_process_readonly": "rejected_conflicting_lock",
+      "same_process_multiple_connections": "accepted",
+      "cross_process_readers_after_writer_closed": "accepted_two_readers"
+    }
+  },
+  "arrow_result_paging_reconnect": {
+    "pass": true,
+    "seconds": 0.036,
+    "detail": {
+      "rows": 50000,
+      "record_batches": 25,
+      "requested_final_page_rows": 848,
+      "decimal_timestamp_null_preserved": true,
+      "ipc_file_bytes": 2191858,
+      "browser_all_rows_required": false,
+      "limitation": "Query execution still needs bounded/streaming fetch; Arrow alone does not enforce it"
+    }
+  },
+  "external_editor_conflict": {
+    "pass": true,
+    "seconds": 0.002,
+    "detail": {
+      "stale_save_rejected": true,
+      "external_edit_preserved": true,
+      "atomic_publish_after_reload": true
+    }
+  },
+  "versions": {
+    "python": "3.12.14",
+    "duckdb": "1.5.6",
+    "pyarrow": "25.0.1"
+  },
+  "scratch_path": "/tmp/workbench-spikes/delivery/delivery-bt8b2vw6"
+}
