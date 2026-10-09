@@ -79,12 +79,17 @@ Screenshots and geometry checks cover widths of 390, 768, 1024, 1280, and 1536 p
 They verify horizontal overflow, desktop pagination, autocomplete colors, and saved-result popovers staying inside the viewport.
 Popover checks also verify hit testing, Escape dismissal, and closed menus being hidden.
 
+An isolated Linux Chromium workspace exercised the bundled Jaffle Shop demo against a separate local macOS server.
+Manual checks covered file editing and saving, Build/Test, model previews, metadata dependencies, lineage, pane resizing, and result comparison.
+Two complete 100-row previews matched. The captures contain demo data and recorded job outcomes.
+
 ## Visual evidence
 
 The supplied [IDE reference](workbench-ide-reference.png) guides dark surfaces, mint controls, and compact tool groups.
 The [light reference](workbench-design-reference.png) guides the light palette.
-Fresh browser captures include the [dark workspace](workbench-query-dark.png), [mobile layout](workbench-query-mobile.png),
-[metadata parser](workbench-metadata.png), [comparison](workbench-results-compare.png),
+The [screenshot guide](screenshots.md) explains the Linux browser captures and their workflows.
+Browser captures include the [dark workspace](workbench-query-dark.png), [mobile layout](workbench-query-mobile.png),
+[metadata parser](workbench-metadata.png), [recorded dependencies](workbench-metadata-dependencies.png), [comparison](workbench-results-compare.png),
 [autocomplete](workbench-autocomplete-dark.png), and [Changes history](workbench-changes.png).
 The [central file editor](workbench-files.png), [lineage](workbench-lineage.png), [Overview](workbench-overview.png),
 [local Git](workbench-git.png), [charts](workbench-charts.png), and [history popover](workbench-history-menu.png) show the pane arrangement.
@@ -104,7 +109,7 @@ bun run test:browser
 Frontend lint uses:
 
 ```sh
-clj-kondo --lint frontend/src/workbench/core.cljs frontend/src/workbench/builder.cljs --config '{:lint-as {com.fulcrologic.fulcro.components/defsc clojure.core/defn com.fulcrologic.fulcro.mutations/defmutation clojure.core/defn} :config-in-call {com.fulcrologic.fulcro.mutations/defmutation {:linters {:unresolved-symbol {:level :off} :unused-binding {:level :off}}}}}'
+clj-kondo --lint frontend/src/workbench/core.cljs --config '{:lint-as {com.fulcrologic.fulcro.components/defsc clojure.core/defn com.fulcrologic.fulcro.mutations/defmutation clojure.core/defn} :config-in-call {com.fulcrologic.fulcro.mutations/defmutation {:linters {:unresolved-symbol {:level :off} :unused-binding {:level :off}}}}}'
 ```
 
 Browser evidence is written to `/tmp/workbench-clojure-browser`.

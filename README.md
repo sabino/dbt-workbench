@@ -3,6 +3,12 @@
 A local dbt editor and query lab built with Clojure, ClojureScript, HoneySQL, and JDBC.
 Native dbt 2.0.5 handles project parsing, compilation, builds, and tests. The application requires no Python.
 
+**Alpha software.** Workflows and APIs can change. Use it for local development and evaluation.
+
+![dbt Workbench with tabbed SQL files, query results, and the project explorer](docs/workbench-query-dark.png)
+
+Explore [screenshots and workflows](docs/screenshots.md) for metadata, lineage, and result comparison.
+
 ## Start
 
 Install Java 21+ and the [Clojure CLI](https://clojure.org/guides/install_clojure).
