@@ -410,10 +410,36 @@ try {
   await expect(page.getByRole("separator", {name: "Resize file explorer and editor", exact: true})).toHaveCount(0);
   const fixtureProject = await (await page.request.get(`${base}/api/projects/demo-jaffle-shop`)).json();
   await writeFile(join(fixtureProject.path, "workbench-metadata.json"), '{"enabled":true,"metrics":["orders","revenue"]}');
+  await writeFile(join(fixtureProject.path, "workbench-helper.py"), "print('hello')\n");
+  await writeFile(join(fixtureProject.path, "workbench-preview.bin"), new Uint8Array([65, 0, 66]));
   await page.getByRole("button", {name: "Refresh project", exact: true}).click();
   await page.getByRole("button", {name: "All files", exact: true}).click();
   await expect(page.locator(".file-explorer")).toHaveCount(1);
   await expect(page.locator(".sidebar .tree-folder")).toHaveCount(0);
+  for (const path of ["seeds/raw_customers.csv", "workbench-helper.py", "LICENSE"]) {
+    const fileResponse = await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=${encodeURIComponent(path)}`)).json();
+    await page.locator(`.file-row[title='${path}']`).click();
+    await expect(page.locator(".file-tab.active")).toContainText(path.split("/").at(-1));
+    await expect(page.getByRole("button", {name: "Text", exact: true})).toHaveClass(/selected/);
+    const original = await visibleFile.innerText();
+    await page.getByRole("button", {name: "SQL", exact: true}).click();
+    expect(await visibleFile.innerText()).toBe(original);
+    await page.getByRole("button", {name: "EDN", exact: true}).click();
+    expect(await visibleFile.innerText()).toBe(original);
+    await page.getByRole("button", {name: "Text", exact: true}).click();
+    await expect(page.getByRole("button", {name: "Save file", exact: true})).toBeDisabled();
+    expect((await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=${encodeURIComponent(path)}`)).json()).content).toBe(fileResponse.content);
+  }
+  await page.locator(".file-row[title='workbench-preview.bin']").click();
+  await expect(page.locator(".file-tab.active")).toContainText("workbench-preview.bin");
+  await expect(page.locator(".file-editor-pane:not([hidden]) .cm-content")).toHaveAttribute("contenteditable", "false");
+  await expect(page.getByRole("button", {name: "SQL", exact: true})).toBeDisabled();
+  await expect(page.getByRole("button", {name: "Save file", exact: true})).toBeDisabled();
+  await expect(page.getByText("Binary content is not displayed. File details are available in Metadata.", {exact: true})).toBeVisible();
+  await page.getByRole("button", {name: "Metadata", exact: true}).click();
+  await expect(metadata).toContainText("Read only");
+  await expect(metadata).toContainText("Bytes on disk");
+  await page.getByRole("button", {name: "Close project view", exact: true}).click();
   await page.locator(".file-row[title='workbench-metadata.json']").click();
   await expect(page.locator(".file-tab.active")).toContainText("workbench-metadata.json");
   await page.getByRole("button", {name: "Metadata", exact: true}).click();
@@ -536,7 +562,7 @@ try {
   await fixtureGit(["config", "user.name", "Workbench test"]);
   await fixtureGit(["config", "user.email", "workbench-test@example.invalid"]);
   await writeFile(join(demo.path, ".gitignore"), "target/\nlogs/\ndbt_packages/\ndbt_modules/\n.user.yml\n");
-  await fixtureGit(["add", "--", "dbt_project.yml", "models", "seeds", ".gitignore", "LICENSE", "PROVENANCE.json", "README.md", "workbench-metadata.json"]);
+  await fixtureGit(["add", "--", "dbt_project.yml", "models", "seeds", ".gitignore", "LICENSE", "PROVENANCE.json", "README.md", "workbench-metadata.json", "workbench-helper.py", "workbench-preview.bin"]);
   await fixtureGit(["commit", "-m", "test: seed local project"]);
   await appendFile(join(demo.path, "models/orders.sql"), "\n-- Local Git browser verification\n");
   await page.getByRole("button", {name: "Documentation", exact: true}).click();

@@ -207,14 +207,16 @@
               (cond-> {:path path} (not (str/blank? (:ui/profiles s))) (assoc :profiles_dir (:ui/profiles s))))
           (.then #(do (patch! {:ui/submitting false}) (load-project! (:id %)))) (.catch report-error!))))))
 (defn update-file-content! [path content]
-  (patch! (cond-> {:ui/open-files (mapv #(if (= path (:path %)) (assoc % :draft content) %) (:ui/open-files (current)))}
-            (= path (get-in (current) [:ui/file :path])) (assoc :ui/content content))))
+  (let [files (:ui/open-files (current)) file (first (filter #(= path (:path %)) files))]
+    (when-not (:read_only file)
+      (patch! (cond-> {:ui/open-files (mapv #(if (= path (:path %)) (assoc % :draft content) %) files)}
+                (= path (get-in (current) [:ui/file :path])) (assoc :ui/content content))))))
 (defn update-document-content! [content]
   (if-let [path (get-in (current) [:ui/file :path])]
     (update-file-content! path content)
     (patch! {:ui/query-content content})))
 (defn select-editor-mode! [mode]
-  (when (#{"sql" "edn" "text"} mode)
+  (when (and (#{"sql" "edn" "text"} mode) (not (get-in (current) [:ui/file :read_only])))
     (if-let [file (:ui/file (current))]
       (patch! {:ui/file (assoc file :editor-mode mode)
                :ui/open-files (mapv #(if (= (:path file) (:path %)) (assoc % :editor-mode mode) %) (:ui/open-files (current)))})
@@ -245,7 +247,7 @@
         (-> (request! "GET" (str "/api/projects/" id "/file?path=" (js/encodeURIComponent path)))
           (.then (fn [file]
                    (when (and (= id (project-id)) (= request-id @file-load-counter))
-                     (let [file (assoc file :draft (if draft (:content draft) (:content file)))]
+                     (let [file (assoc file :draft (if (and draft (not (:read_only file))) (:content draft) (:content file)))]
                        (patch! {:ui/open-files (conj (filterv #(not= path (:path %)) (:ui/open-files (current))) file)})
                        (activate-file! file)))))
           (.catch (fn [error]
@@ -255,7 +257,7 @@
   (when (:path model) (load-file! (:path model))))
 (defn save-file! []
   (let [s (current) file (:ui/file s) id (project-id)]
-    (when (and file (nil? (:ui/loading-file s)))
+    (when (and file (not (:read_only file)) (nil? (:ui/loading-file s)))
       (patch! {:ui/submitting true :ui/error nil})
       (-> (request! "PUT" (api-path "/file")
             {:path (:path file) :content (:ui/content s) :expected_revision (:revision file)})
@@ -314,6 +316,7 @@
       (try
         (when-not (#{"sql" "edn"} format) (throw (js/Error. "Choose SQL or EDN to execute this document.")))
         (when (:ui/loading-file s) (throw (js/Error. "Wait for the file to finish opening.")))
+        (when (get-in s [:ui/file :read_only]) (throw (js/Error. "This file is read-only in the workbench.")))
         (when (and (:path document) (re-find #"\{[\{%]" content))
           (throw (js/Error. "Save this dbt model, then use Preview model to compile its references.")))
         (let [input (js->clj (editor/executionInput content (clj->js selection) format (boolean all?)) :keywordize-keys true)]
@@ -635,7 +638,7 @@
              (dom/div #js {:key (:path file) :className "file-editor-pane" :hidden (not= (:path file) (get-in props [:ui/file :path]))}
                (react/createElement editor/QueryEditor
                  #js {:value (:draft file) :format (resolve-file-format file) :schema schema :label "File editor" :file true
-                      :readOnly (boolean (:ui/loading-file props)) :selection (clj->js (:selection file {:from 0 :to 0 :head 0}))
+                      :readOnly (boolean (or (:read_only file) (:ui/loading-file props))) :selection (clj->js (:selection file {:from 0 :to 0 :head 0}))
                       :onSelection #(update-file-selection! (:path file) %)
                       :onChange #(update-file-content! (:path file) %) :onSave save-file!
                       :onRun (fn [all? content selection] (run-query! all? content selection))}))) (:ui/open-files props)))))
@@ -644,16 +647,17 @@
   (let [document (read-editor-document props) mode (:format document) edn? (= "edn" mode)
         file (:ui/file props) dirty (and file (not= (:ui/content props) (:ui/saved-content props)))
         template? (and file (re-find #"\{[\{%]" (:content document)))
-        blocked? (or (:ui/submitting props) (:ui/loading-file props))]
+        read-only? (:read_only file)
+        blocked? (or read-only? (:ui/submitting props) (:ui/loading-file props))]
     (dom/div #js {:className "query-workspace" :style #js {"--query-split" (str (:ui/query-split props) "%")}}
       (dom/div #js {:className "code-card file-workspace"}
         (render-document-tabs props)
         (dom/div #js {:className "code-toolbar query-toolbar"}
           (dom/div #js {:className "segmented"}
-            (button "SQL" #(select-editor-mode! "sql") (when (= "sql" mode) "selected"))
-            (button "EDN" #(select-editor-mode! "edn") (when edn? "selected"))
+            (button "SQL" #(select-editor-mode! "sql") (when (= "sql" mode) "selected") read-only?)
+            (button "EDN" #(select-editor-mode! "edn") (when edn? "selected") read-only?)
             (when (and file (not (str/ends-with? (:path file) ".sql")) (not (str/ends-with? (:path file) ".edn")))
-              (button "Text" #(select-editor-mode! "text") (when (= "text" mode) "selected")))
+              (button "Text" #(select-editor-mode! "text") (when (= "text" mode) "selected") read-only?))
             (dom/button #js {:className "button" :disabled true :title "Visual query builder is disabled"} "Visual"))
           (dom/div #js {:className "query-run-actions"}
             (button "Format" format-query! "small" (or blocked? (= "text" mode) template?))
@@ -682,6 +686,7 @@
               (button (if edn? "Run query" "Run statement") #(run-query! false) "primary" (or blocked? template?)))
             (when (= "sql" mode) (button "Run all" #(run-query! true) "small" (or blocked? template?)))))
         (when (:ui/loading-file props) (dom/div #js {:className "file-loading" :aria-live "polite"} (str "Opening " (:ui/loading-file props) "…")))
+        (when read-only? (dom/div #js {:className "file-loading" :role "status"} (str (:preview_reason file) " File details are available in Metadata.")))
         (dom/div #js {:className "file-actions"}
           (dom/span #js {:className "hint document-path" :title (:path document)} (or (:path document) "Scratch query · SQL / EDN changes the mode, preserves the text"))
           (when dirty (dom/span #js {:className "unsaved"} "Unsaved"))
@@ -885,7 +890,7 @@
                             :value (:ui/files-search props) :onChange #(value! :ui/files-search %)}))
           (dom/div #js {:className "file-tree"}
             (cond
-              (empty? entries) (dom/p #js {:className "sidebar-hint"} (if models? "Parse the project to discover models." "No editable project files."))
+              (empty? entries) (dom/p #js {:className "sidebar-hint"} (if models? "Parse the project to discover models." "No project files."))
               (empty? filtered) (dom/p #js {:className "sidebar-hint"} (if models? "No matching models." "No matching files."))
               :else (file-tree filtered models (get-in props [:ui/file :path]) ""))))))))
 

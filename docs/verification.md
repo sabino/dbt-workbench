@@ -5,11 +5,12 @@ The application runtime requires no Python. Dependency versions are pinned in `d
 
 ## Backend
 
-`clojure -M:test` passed **52 tests and 411 assertions**, with zero failures or errors.
+`clojure -M:test` passed **54 tests and 443 assertions**, with zero failures or errors.
 The suite uses real native dbt, DuckDB JDBC, SQLite, temporary Git repositories, and HTTP requests.
 The demo builds three seeds and five models and passes 20 dbt tests.
 
 Coverage includes file revision conflicts, durable edit history, path restrictions, and HTTP input validation.
+Text previews include CSV, scripts, and extensionless files. Binary, invalid UTF-8, and oversized files remain read-only.
 Execution checks cover SQL/EDN conversion, parameters, ordered batches, partial failures, cancellation, row limits, preview compilation, and baseline deferral.
 Result comparisons preserve duplicate counts and report schema differences and truncated inputs.
 
@@ -44,6 +45,7 @@ Query checks cover Build/Test, highlighting, completion, line numbers, Shift+Ent
 They also cover sequential results, pagination, parameters, formatting, failed drafts, and cancellation.
 SQL and EDN execute directly from file tabs. Mode switches preserve text, parameters, dirty state, and undo history.
 Visual mode remains disabled. Markdown and JSON files open alongside SQL files in the central editor.
+CSV, Python, and extensionless files retain text across mode switches. Binary files open in read-only tabs with metadata.
 A local federated join across development and baseline connections returned the expected 100 matching customers.
 Saved queries were reopened and exported through the UI.
 A delayed file response check verifies that the last selection wins.

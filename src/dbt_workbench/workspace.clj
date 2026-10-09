@@ -5,10 +5,12 @@
             [clojure.walk :as walk]
             [dbt-workbench.text :as text]
             [dbt-workbench.storage :as storage])
-  (:import (java.nio.file Files StandardCopyOption)))
+  (:import (java.nio ByteBuffer)
+           (java.nio.charset CharacterCodingException CodingErrorAction StandardCharsets)
+           (java.nio.file Files StandardCopyOption)))
 
 (def excluded #{"target" "logs" "dbt_packages" "dbt_modules" ".git" ".venv" "node_modules"})
-(def editable #{"sql" "yml" "yaml" "edn" "md" "json"})
+(def max-file-preview-bytes (* 2 1024 1024))
 (defn read-yaml [path]
   (if (.isFile (io/file path))
     (let [data (yaml/parse-string (slurp path))]
@@ -59,12 +61,13 @@
   (let [project (find-project directory id) root (.toPath (io/file (:path project)))
         config (read-yaml (io/file (:path project) "dbt_project.yml"))
         ignored (into excluded (keep #(some-> (config %) str (text/split-on "/") first) [:target-path :log-path :packages-install-path]))]
-    (->> (tree-seq #(and (.isDirectory %) (not (Files/isSymbolicLink (.toPath %)))) #(seq (.listFiles %)) (.toFile root))
+    (->> (tree-seq #(and (.isDirectory %) (not (Files/isSymbolicLink (.toPath %))))
+                  #(remove (fn [file] (ignored (.getName file))) (seq (.listFiles %))) (.toFile root))
          (filter #(.isFile %))
          (remove #(Files/isSymbolicLink (.toPath %)))
-         (map (fn [file] (let [path (str (.relativize root (.toPath file))) kind (last (text/split-on path "."))]
-                          {:path path :name (.getName file) :kind kind})))
-         (filter #(and (editable (:kind %)) (not= "profiles.yml" (:name %)) (not-any? ignored (text/split-on (:path %) "/"))))
+         (map (fn [file] (let [path (str (.relativize root (.toPath file))) kind (str/lower-case (last (text/split-on (.getName file) ".")))]
+                          {:path path :name (.getName file) :kind kind :size_bytes (.length file)})))
+         (remove #(= "profiles.yml" (:name %)))
          (sort-by :path) vec)))
 (defn file-path [directory id path]
   (when-not (and (string? path) (not (str/blank? path)) (not (str/includes? path "\\")) (not (str/includes? path "\u0000")))
@@ -81,16 +84,35 @@
           (when (Files/isSymbolicLink next-path) (storage/fail! "Symbolic links cannot be edited."))
           (recur next-path (next parts)))))
     (.toFile file)))
+(defn decode-file-bytes [data]
+  (when-not (some zero? data)
+    (try
+      (str (.decode (doto (.newDecoder StandardCharsets/UTF_8)
+                      (.onMalformedInput CodingErrorAction/REPORT)
+                      (.onUnmappableCharacter CodingErrorAction/REPORT))
+                    (ByteBuffer/wrap data)))
+      (catch CharacterCodingException _ nil))))
 (defn read-file [directory id path]
-  (let [content (slurp (file-path directory id path))]
-    {:path path :content content :revision (storage/digest content)}))
+  (let [file (file-path directory id path) size (.length file)
+        data (when (<= size max-file-preview-bytes)
+               (with-open [stream (io/input-stream file)] (.readNBytes stream (inc max-file-preview-bytes))))
+        too-large? (or (> size max-file-preview-bytes) (> (count data) max-file-preview-bytes))
+        content (when-not too-large? (decode-file-bytes data))
+        read-only? (nil? content)]
+    (cond-> {:path path :content (or content "") :size_bytes size :read_only read-only?}
+      read-only? (assoc :preview_reason (if too-large? "This file exceeds the 2 MiB text preview limit." "Binary content is not displayed."))
+      (not read-only?) (assoc :revision (storage/digest content)))))
 (defn list-changes [directory id]
   (vec (reverse (storage/read-json (io/file (project-data directory id) "changes.json") []))))
 (defn save-file! [directory id {:keys [path content expected_revision reason]}]
   (locking directory
     (let [file (file-path directory id path) before (read-file directory id path)]
+      (when (:read_only before) (storage/fail! "This file is read-only in the workbench."))
       (when-not (= expected_revision (:revision before)) (storage/fail! "This file changed on disk. Reload before saving." 409))
       (when-not (string? content) (storage/fail! "File content must be text."))
+      (when (str/includes? content "\u0000") (storage/fail! "Text files cannot contain NUL bytes."))
+      (when (> (alength (.getBytes ^String content StandardCharsets/UTF_8)) max-file-preview-bytes)
+        (storage/fail! "Text edits must fit within the 2 MiB preview limit."))
       (when-not (= content (:content before))
         (let [history (io/file (project-data directory id) "changes.json")
               records (storage/read-json history [])

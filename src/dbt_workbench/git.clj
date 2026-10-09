@@ -47,7 +47,6 @@
     (when (or (.isAbsolute relative) (not (.startsWith resolved root-path))
               (some #{".." "." ""} parts) (some ignored parts)
               (= "profiles.yml" (last parts))
-              (not (workspace/editable (last (text/split-on path "."))))
               (and (not= profiles-path root-path) (.startsWith resolved profiles-path))
               (.isDirectory (.toFile resolved)))
       (storage/fail! "Only project source files can be managed with Git."))

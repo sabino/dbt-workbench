@@ -331,9 +331,9 @@ export function MetadataPanel(props) {
   const rowProps = {...props, "resources": resources, "files": files["data"]?.["files"] || [], "catalogReady": Boolean(catalog["data"]), "onSelectResource": setSelected};
   if (!file) return h("p", {"className": "panel-empty"}, "Open a project file to inspect its metadata.");
   return h("div", {"className": "inspector-content metadata-panel"}, h("div", {"className": "panel-toolbar"}, h(Info, {"size": 18, "aria-hidden": true}), h("h2", null, file["path"].split("/").at(-1))),
-    h(MetadataList, {"items": [["File", draft["path"]], ["Type", draft["type"]], ["Lines", draft["line_count"]], ["Characters", draft["character_count"]]]}),
+    h(MetadataList, {"items": [["File", draft["path"]], ["Type", draft["type"]], ["Bytes on disk", file["size_bytes"]], ["Access", file["read_only"] ? "Read only" : "Editable text"], ...(!file["read_only"] ? [["Lines", draft["line_count"]], ["Characters", draft["character_count"]]] : [])]}),
     h("details", {"className": "metadata-disclosure"}, h("summary", null, "Saved file identity"), h(MetadataList, {"items": [["Saved revision", file["revision"]]]})),
-    h(DraftMetadata, {...rowProps, "draft": draft}),
+    file["read_only"] ? h("p", {"className": "hint", "role": "status"}, file["preview_reason"]) : h(DraftMetadata, {...rowProps, "draft": draft}),
     h(ResourceState, {"resource": catalog}, matches.length > 1 ? h("label", null, "Recorded resource", h("select", {"aria-label": "Metadata resource", "value": matches.some(resource => resource["unique_id"] === current?.["unique_id"]) ? current["unique_id"] : "", "onChange": event => setSelected(event["target"]["value"])},
       h("option", {"value": ""}, "Resources in the active file"), matches.map(resource => h("option", {"key": resource["unique_id"], "value": resource["unique_id"]}, `${resource["name"]} · ${resource["resource_type"]}`)))) : null,
       selected && current ? h("div", {"className": "metadata-inspection-context"}, h("p", {"className": "hint"}, `Inspecting ${current["name"]}. The active file draft stays unchanged.`), h("button", {"className": "button small", "onClick": () => setSelected("")}, "Back to active file")) : null,

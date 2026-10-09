@@ -49,6 +49,43 @@
   (doseq [path ["../profiles.yml" "profiles.yml" "/etc/passwd" "target/manifest.json"]]
     (is (thrown? clojure.lang.ExceptionInfo (workspace/read-file (:directory @context) (:id @context) path)))))
 
+(deftest project-file-previews
+  (let [directory (str (Files/createTempDirectory "workbench-files-" (make-array java.nio.file.attribute.FileAttribute 0)))
+        project (workspace/create-demo! directory) id (:id project) root (:path project)
+        text-files {"notes.txt" "Café\n" "helper.py" "print('hello')\n" "table.csv" "id,name\n1,River\n"
+                    "LICENSE" "License example\n" ".gitignore" "target/\n"}
+        binary-files {"binary-preview.bin" (byte-array [65 0 66]) "invalid-utf8.txt" (byte-array [-1 -2])}
+        large-content (apply str (repeat (* 3 1024 1024) "x"))]
+    (try
+      (doseq [[path content] text-files] (storage/save-text! (io/file root path) content))
+      (doseq [[path content] binary-files]
+        (with-open [stream (io/output-stream (io/file root path))] (.write stream content)))
+      (storage/save-text! (io/file root "large-preview.txt") large-content)
+      (let [paths (set (map :path (workspace/list-files directory id)))]
+        (is (every? paths (concat (keys text-files) (keys binary-files) ["large-preview.txt"]))))
+      (doseq [[path content] text-files]
+        (let [preview (workspace/read-file directory id path)]
+          (is (= content (:content preview)))
+          (is (false? (:read_only preview)))))
+      (doseq [[path bytes] binary-files]
+        (let [preview (workspace/read-file directory id path)]
+          (is (true? (:read_only preview)))
+          (is (= "" (:content preview)))
+          (is (thrown? clojure.lang.ExceptionInfo (workspace/save-file! directory id {:path path :content "replace" :expected_revision (:revision preview)})))
+          (is (= (seq bytes) (seq (Files/readAllBytes (.toPath (io/file root path))))))))
+      (let [preview (workspace/read-file directory id "large-preview.txt")]
+        (is (true? (:read_only preview)))
+        (is (= (count large-content) (:size_bytes preview)))
+        (is (re-find #"2 MiB" (:preview_reason preview)))
+        (is (thrown? clojure.lang.ExceptionInfo (workspace/save-file! directory id {:path "large-preview.txt" :content "replace"})))
+        (is (= large-content (slurp (io/file root "large-preview.txt")))))
+      (let [original (workspace/read-file directory id "notes.txt")]
+        (doseq [content [large-content "text\u0000bytes"]]
+          (is (thrown? clojure.lang.ExceptionInfo (workspace/save-file! directory id {:path "notes.txt" :content content :expected_revision (:revision original)}))))
+        (is (= (:content original) (:content (workspace/read-file directory id "notes.txt"))))
+        (is (= "Edited text\n" (:content (workspace/save-file! directory id {:path "notes.txt" :content "Edited text\n" :expected_revision (:revision original)})))))
+      (finally (doseq [file (reverse (file-seq (io/file directory)))] (.delete file))))))
+
 (deftest native-query-boundaries
   (doseq [content ["DELETE FROM orders" "SELECT * INTO backup FROM orders" "SELECT * FROM read_csv('/etc/passwd')" "SELECT FROM" "SELECT read_text('/etc/passwd')"]]
     (is (thrown? Exception (parse/parse-sql content)) content))

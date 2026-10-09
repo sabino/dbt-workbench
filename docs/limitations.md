@@ -58,6 +58,8 @@ Metadata infers static draft references, literal configuration, and explicit out
 Dynamic templates, wildcards, batches, and ambiguous projections cannot establish a complete schema.
 Inferred field names have no inferred types. Recorded schema and tests can differ from an unsaved draft.
 Draft parsing supports SQL/Jinja and JSON. Other file types show file details and any matching recorded resources.
+File tabs edit UTF-8 text up to 2 MiB. Binary and larger files provide read-only metadata without editable content.
+Generated directories, symbolic links, and `profiles.yml` stay outside the explorer.
 Catalog and run results are selected from available artifacts by file modification time.
 Source freshness is displayed only from existing `sources.json` results; the app does not launch freshness checks.
 

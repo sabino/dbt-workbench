@@ -20,8 +20,8 @@ Request bodies are limited to 2 MB and validated with Malli.
 | GET | `/api/projects/{id}/documentation?resource_id=...` | Resource documentation, schema, tests, code, freshness |
 | GET | `/api/projects/{id}/runs/{job_id}` | Job, invocation artifacts, outcomes, test summary |
 | GET | `/api/jobs/{id}/artifacts?run=...&name=...` | Download an existing artifact |
-| GET | `/api/projects/{id}/files` | Editable paths |
-| GET | `/api/projects/{id}/file?path=...` | Text and revision |
+| GET | `/api/projects/{id}/files` | Project paths, file types, and byte sizes |
+| GET | `/api/projects/{id}/file?path=...` | Text, revision, byte size, and read-only preview details |
 | PUT | `/api/projects/{id}/file` | Save `{path, content, expected_revision}` |
 | GET | `/api/projects/{id}/changes` | Before/after edit history |
 | POST | `/api/projects/{id}/baseline/import` | Import `{artifact_dir, target}` |

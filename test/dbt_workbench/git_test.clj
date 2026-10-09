@@ -59,6 +59,18 @@
       (is (.exists (io/file root "models/new file.sql")))
       (finally (delete-fixture! directory)))))
 
+(deftest source-control-file-types
+  (let [{:keys [directory root]} (create-fixture!)
+        files {"seed.csv" "id,name\n1,River\n" "helper.py" "print('hello')\n" "LICENSE" "License example\n"}]
+    (try
+      (doseq [[path content] files]
+        (spit (io/file root path) content)
+        (git/stage! directory "test" path))
+      (is (= (set (keys files)) (set (map :path (filter :staged (:changes (git/read-state directory "test")))))))
+      (git/commit! directory "test" "Add project files")
+      (doseq [[path content] files] (is (= content (run-git! root "show" (str "HEAD:" path)))))
+      (finally (delete-fixture! directory)))))
+
 (deftest source-control-boundaries-and-hooks
   (let [{:keys [directory root]} (create-fixture!)]
     (try

@@ -56,6 +56,8 @@ Widths, vertical splits, navigation collapse, and explorer visibility survive re
 **SQL / EDN** selects highlighting and execution mode. Switching modes preserves document text and undo history.
 **Visual** is disabled. Text files also offer **Text** mode.
 Each file tab retains its draft, selection, and editor mode until closed.
+**All files** includes CSV, scripts, and files without extensions.
+UTF-8 text up to 2 MiB is editable. Binary and larger files open as read-only tabs with file metadata.
 **Query 1** is a scratch document. Loading saved queries or Activity inputs opens it while preserving file drafts.
 Use **Save file** to write a project file. **Preview model** compiles a saved dbt model before executing its SELECT.
 
