@@ -27,8 +27,9 @@ The CLI check establishes SELECT execution through that adapter, not those separ
 
 ## Frontend
 
-`bun test src` passed **9 tests and 23 assertions**.
+`bun test src` passed **17 tests and 65 assertions**.
 Tests cover statement boundaries, cursor and selection execution, empty input, formatting, chart aggregation, query-library validation, and lineage layout.
+Metadata tests cover SQL/Jinja lexical boundaries, outer projections, literal configuration, dynamic expressions, incomplete drafts, and JSON value types.
 The optimized frontend build completed with **zero compilation warnings**.
 The build tool emitted its JVM dependency's `sun.misc.Unsafe` deprecation notice.
 Backend lint completed with zero errors and warnings.
@@ -36,15 +37,17 @@ Frontend lint completed with zero errors and warnings using explicit Fulcro macr
 
 ## Browser
 
-`bun run test:browser` passed **17 job workflows with zero uncaught browser errors**.
+`bun run test:browser` passed **18 job workflows with zero uncaught browser errors**.
 It starts an isolated temporary server and removes its project data afterward.
 
 Query checks cover Build/Test, highlighting, completion, line numbers, Shift+Enter/F5, selection, cursor execution, and editor focus.
-They also cover sequential results, pagination, visual filters and joins, SQL/EDN conversions, parameters, formatting, failed drafts, and cancellation.
+They also cover sequential results, pagination, parameters, formatting, failed drafts, and cancellation.
+SQL and EDN execute directly from file tabs. Mode switches preserve text, parameters, dirty state, and undo history.
+Visual mode remains disabled. Markdown and JSON files open alongside SQL files in the central editor.
 A local federated join across development and baseline connections returned the expected 100 matching customers.
 Saved queries were reopened and exported through the UI.
 A delayed file response check verifies that the last selection wins.
-File editing pauses during loading while Query lab remains editable.
+The active editor pauses during loading. Switching back to a loaded tab cancels the pending selection.
 
 Comparison uses the current executed result as its left input. The user chooses one other saved result.
 Compare controls appear only under Results. The browser verifies matched rows and prevents comparing a result with itself.
@@ -53,7 +56,7 @@ Activity retains query inputs for Load/Replay. Changes retains before/after file
 Layout checks verify the following:
 
 - Query lab remains mounted while project tools open between left navigation and the query pane.
-- Files use one right-hand explorer with Models/All files views, file tabs, preserved drafts, and undo.
+- Files use one right-hand explorer with Models/All files views. File tabs, preserved drafts, and undo live in Query lab.
 - Results, Lineage, Activity, Changes, and Runs & tests remain available below Query lab.
 
 Resizing checks exercise pointer dragging and arrow keys.
@@ -62,6 +65,8 @@ Reset layout restores defaults. The fixed global status bar remains at the viewp
 Project and theme choices persist. Choose project clears the stored selection and reopens the chooser.
 
 Browser workflows also inspect documentation, lineage dependencies, dbt artifacts, local connection health, schema discovery, and routing overrides.
+Metadata follows the active file and separates inferred unsaved fields from recorded columns.
+Inspecting a reference preserves the active draft. JSON configuration exposes top-level value types.
 A temporary Git repository exercises side-by-side diffs, staging, unstaging, committing, branch creation, and branch switching.
 Overview displays recorded tests, local source changes, recent jobs, and model impact.
 Chart checks cover multiple metrics, Count distinct, line plots, and legend controls.
@@ -75,9 +80,9 @@ Popover checks also verify hit testing, Escape dismissal, and closed menus being
 The supplied [IDE reference](workbench-ide-reference.png) guides dark surfaces, mint controls, and compact tool groups.
 The [light reference](workbench-design-reference.png) guides the light palette.
 Fresh browser captures include the [dark workspace](workbench-query-dark.png), [mobile layout](workbench-query-mobile.png),
-[Visual builder](workbench-query-visual.png), [comparison](workbench-results-compare.png),
+[metadata parser](workbench-metadata.png), [comparison](workbench-results-compare.png),
 [autocomplete](workbench-autocomplete-dark.png), and [Changes history](workbench-changes.png).
-The [file viewer](workbench-files.png), [lineage](workbench-lineage.png), [Overview](workbench-overview.png),
+The [central file editor](workbench-files.png), [lineage](workbench-lineage.png), [Overview](workbench-overview.png),
 [local Git](workbench-git.png), [charts](workbench-charts.png), and [history popover](workbench-history-menu.png) show the pane arrangement.
 
 ## Commands

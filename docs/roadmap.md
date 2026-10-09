@@ -8,7 +8,8 @@ A generated query or working UI alone does not establish cross-engine correctnes
 | SQL conversion | Bounded SQL/HoneySQL roundtrips | Add execution tests for each AST shape |
 | Connections | DuckDB, Snowflake JDBC, Snow CLI references | Define authentication, declared types, timeouts, and cancellation |
 | Federation | Bounded JDBC captures joined in DuckDB | Prove source consistency and type semantics before expanding limits |
-| Inspection | Manifest resources, catalog schema, recorded runs and freshness | Preserve artifact provenance and explicit missing states |
+| Inspection | Static draft metadata, manifest resources, catalog schema, recorded runs and freshness | Expand parsing without claiming inferred types or executing templates |
+| Visual queries | Disabled | Preserve file text and undo before restoring builder controls |
 | Saved queries | Browser storage and JSON export | Define import validation and shared persistence before adding sync |
 | Version control | Local Git operations and explicit GitHub reads/drafts | Define review and authorization boundaries for remote writes |
 

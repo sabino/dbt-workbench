@@ -8,7 +8,7 @@ const h = React.createElement;
 export function readSavedQueries(storage, key) {
   try {
     const data = JSON.parse(storage.getItem(key) || "[]");
-    return Array.isArray(data) ? data.filter(query => typeof query["id"] === "string" && typeof query["name"] === "string" && typeof query["content"] === "string" && ["sql", "edn", "visual"].includes(query["format"])) : [];
+    return Array.isArray(data) ? data.filter(query => typeof query["id"] === "string" && typeof query["name"] === "string" && typeof query["content"] === "string" && ["sql", "edn", "text", "visual"].includes(query["format"])) : [];
   } catch { return []; }
 }
 

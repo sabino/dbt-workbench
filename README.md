@@ -23,13 +23,14 @@ Results stay below the query editor. The global status bar remains visible acros
 Collapse the left navigation to icons when you need more workspace.
 Project views open between navigation and Query lab.
 Results, Lineage, Activity, Changes, and Runs & tests occupy tabs below the query editor.
-The right Files pane contains the explorer, open file tabs, and editor.
+Query lab opens project files in tabs beside a scratch query.
+The right Files pane contains the explorer.
 **Models / All files** filters one tree. File navigation replaces the duplicate left file list.
 
 | Workflow | Where |
 | --- | --- |
-| Edit multiple project files with conflict checks | Right Files pane |
-| Run SQL, HoneySQL EDN, or visual queries | Query lab |
+| Edit multiple project files with conflict checks | Query lab > File tabs |
+| Run SQL or HoneySQL EDN queries | Query lab |
 | Inspect rows, charts, SQL, and provenance | Results |
 | Compare the current result with a saved result | Results > Compare |
 | Save, reopen, or export query drafts | Query lab > Saved queries |
@@ -37,6 +38,7 @@ The right Files pane contains the explorer, open file tabs, and editor.
 | Browse models, sources, macros, tests, and other manifest resources | Project view > Documentation |
 | Inspect dbt outcomes, timing, artifacts, and previous-run summaries | Below Query lab > Runs & tests |
 | Stage, commit, switch, rebase, or cherry-pick locally | Project view > Version control |
+| Inspect draft fields, references, configuration, and recorded dependencies | Project view > Metadata |
 | Read GitHub pull requests and checks, or explicitly create a draft | Version control > Pull requests |
 | Register connections and override model destinations | Project views > Connections and Environment routing |
 | Inspect executed inputs or reload saved edits | Below Query lab > Activity and Changes |
@@ -51,10 +53,17 @@ Drag pane dividers or use their arrow keys. Double-click a divider to restore it
 Widths, vertical splits, navigation collapse, and explorer visibility survive reload in the same browser.
 **Reset layout** restores all pane preferences. Query execution preserves editor focus.
 
-**SQL / EDN / Visual** converts the draft between supported representations.
-Unsupported conversions retain the draft and show a diagnostic.
-Visual controls cover sources, fields, filters, aggregations, joins, grouping, sorting, and limits.
-Advanced expressions remain editable in SQL or EDN.
+**SQL / EDN** selects highlighting and execution mode. Switching modes preserves document text and undo history.
+**Visual** is disabled. Text files also offer **Text** mode.
+Each file tab retains its draft, selection, and editor mode until closed.
+**Query 1** is a scratch document. Loading saved queries or Activity inputs opens it while preserving file drafts.
+Use **Save file** to write a project file. **Preview model** compiles a saved dbt model before executing its SELECT.
+
+**Metadata**, below Version control, follows the active file.
+It infers static SQL/Jinja references, configuration, and outer SELECT field names from the draft.
+JSON files expose top-level value types. Other files show path, type, and size details.
+Recorded dbt artifacts supply columns, types, tests, tags, configuration, upstream resources, and downstream resources.
+Draft inference and recorded artifacts appear separately. Dynamic templates and wildcards leave schema details unknown.
 
 EDN represents queries as HoneySQL data:
 

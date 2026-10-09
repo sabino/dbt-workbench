@@ -8,7 +8,7 @@
   (:import (java.nio.file Files StandardCopyOption)))
 
 (def excluded #{"target" "logs" "dbt_packages" "dbt_modules" ".git" ".venv" "node_modules"})
-(def editable #{"sql" "yml" "yaml" "edn" "md"})
+(def editable #{"sql" "yml" "yaml" "edn" "md" "json"})
 (defn read-yaml [path]
   (if (.isFile (io/file path))
     (let [data (yaml/parse-string (slurp path))]

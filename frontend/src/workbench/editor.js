@@ -92,7 +92,7 @@ export function formatSql(text, options = {}) {
 }
 
 export function focusQueryEditor() {
-  document.querySelector(".query-code-editor .cm-content")?.focus();
+  document.querySelector(".main-pane .file-editor-pane:not([hidden]) .cm-content")?.focus();
 }
 
 function completeDbt(context) {

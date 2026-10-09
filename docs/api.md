@@ -87,7 +87,7 @@ Common options include `target`, `defer`, and `favor_state`.
 Query options include `content`, `statements`, `format`, `dialect`, `parameters`, `editor_content`,
 `selection`, `execution_scope`, `editor_mode`, `max_rows`, and `timeout_seconds`.
 Dialects are `duckdb`, `sqlite`, `snowflake`, and `federated`.
-Visual jobs use `format: "edn"` and `editor_mode: "visual"`.
+Historical Visual jobs retain `format: "edn"` and `editor_mode: "visual"`. Browser Visual mode is disabled.
 Preview uses `model_id` and optional `baseline`.
 Compare uses `left_result_id`, `right_result_id`, and optional `key_columns`.
 

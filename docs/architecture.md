@@ -27,8 +27,8 @@ There is no global mutable query metadata cache.
 
 JSqlParser identifies physical tables, parameters, and unsafe operations.
 Malli validates requests and structured EDN. HoneySQL compiles query maps to SQL with separate parameter values.
-SQL-to-EDN conversion supports a bounded grammar. Unsupported expressions retain the browser draft with a diagnostic.
-Visual controls edit the same query maps. Relation schema comes from real connection metadata.
+The SQL-to-EDN API supports a bounded grammar and reports unsupported expressions.
+Browser mode switches change highlighting and execution mode while preserving document text. Visual mode is disabled.
 Tokenization preserves strings and comments when splitting statements or binding parameters.
 
 DuckDB opens database files read-only. SQLite previews copy referenced DuckDB relations into memory.
@@ -76,12 +76,17 @@ Draft creation requires a published matching branch. The workbench does not push
 ## Browser and distribution
 
 The left navigation collapses to icons and retains labeled project-tool actions.
-Overview, Documentation, Connections, Environment routing, and Version control open between navigation and Query lab.
+Overview, Documentation, Connections, Environment routing, Version control, and Metadata open between navigation and Query lab.
 Query lab stays mounted independently of project views and lower tabs.
 Results, Lineage, Activity, Changes, and Runs & tests share the resizable panel below its editor.
-The right Files pane contains the sole file explorer, file tabs, and CodeMirror editors.
+Query lab contains the file tabs and CodeMirror editors alongside a scratch query.
+The right Files pane contains the sole file explorer.
 Models and All files filter one tree, replacing the duplicate left file list.
-Multiple file tabs retain drafts. Pane sizes, explorer visibility, file views, and navigation collapse persist in browser storage.
+Multiple file tabs retain drafts, selection, undo history, and editor mode. Loading saved queries activates the scratch document.
+Pane sizes, explorer visibility, file views, and navigation collapse persist in browser storage.
+Metadata follows the active file. Its static lexer infers literal Jinja calls and unambiguous outer SELECT field names.
+It reads JSON top-level types without evaluating templates. Recorded schema and dependencies come from existing dbt artifacts.
+Types, dynamic expressions, wildcards, and ambiguous projections remain explicitly unknown during draft inference.
 A global status bar shows progress, elapsed time, errors, and cancellation across views.
 The browser query library saves drafts per project and exports JSON.
 Formatting preferences and query drafts remain in browser storage, separate from server persistence.

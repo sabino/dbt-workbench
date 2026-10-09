@@ -15,8 +15,8 @@ Native dbt platform support remains separate. Builds use profile targets and can
 
 Only validated SELECT/WITH queries run in Query lab. Compile dbt Jinja before querying it.
 Unsupported SQL functions, syntax, or conversion nodes fail with a diagnostic.
-SQL-to-EDN and Visual mode support bounded grammars. Keep advanced expressions in SQL or supported EDN.
-Visual mode excludes query batches, CTEs, and unsupported nested expressions.
+The SQL-to-EDN API supports a bounded grammar. Browser mode switches preserve the text without translating it.
+Visual mode is disabled. Write SQL or supported HoneySQL EDN in the editor.
 
 SQLite copies can truncate input relations. Its date, type, collation, and numeric semantics can differ from DuckDB.
 Native division is refused in SQLite. Structured division specifies floating-point results and NULL on zero.
@@ -54,6 +54,10 @@ JSON decimal values preserve decimal text; consumers must retain column type met
 Run comparison covers recorded model/test outcomes and timing, not row differences.
 
 Documentation depends on existing dbt artifacts. Parse or build after source changes to refresh the manifest.
+Metadata infers static draft references, literal configuration, and explicit outer SELECT field names without compiling templates.
+Dynamic templates, wildcards, batches, and ambiguous projections cannot establish a complete schema.
+Inferred field names have no inferred types. Recorded schema and tests can differ from an unsaved draft.
+Draft parsing supports SQL/Jinja and JSON. Other file types show file details and any matching recorded resources.
 Catalog and run results are selected from available artifacts by file modification time.
 Source freshness is displayed only from existing `sources.json` results; the app does not launch freshness checks.
 

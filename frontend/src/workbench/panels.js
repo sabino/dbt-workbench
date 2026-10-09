@@ -4,6 +4,7 @@ import {ConnectionsPanel, RoutingPanel} from "./connections-panel.js";
 import {DocumentationPanel, RunsPanel} from "./catalog-panel.js";
 import {useResource, ResourceState} from "./panel-utils.js";
 import {OverviewPanel} from "./overview-panel.js";
+import {MetadataPanel} from "./metadata-panel.js";
 import {GitBranch} from "@phosphor-icons/react/dist/csr/GitBranch";
 export {ResultChart, aggregateChart} from "./charts.js";
 
@@ -78,7 +79,7 @@ function LineagePanel(props) {
 export function ProjectInspector(props) {
   const base = `/api/projects/${props["project"]["id"]}`;
   const childProps = {...props, "base": base};
-  const views = {"lineage": LineagePanel, "documentation": DocumentationPanel, "git": GitPanel, "connections": ConnectionsPanel, "routing": RoutingPanel, "runs": RunsPanel, "overview": OverviewPanel};
+  const views = {"metadata": MetadataPanel, "lineage": LineagePanel, "documentation": DocumentationPanel, "git": GitPanel, "connections": ConnectionsPanel, "routing": RoutingPanel, "runs": RunsPanel, "overview": OverviewPanel};
   return h(views[props["view"]] || OverviewPanel, {...childProps, "key": `${base}-${props["view"]}`});
 }
 
@@ -95,7 +96,7 @@ export function CommandPalette(props) {
   const [search, setSearch] = React.useState("");
   const [index, setIndex] = React.useState(0);
   const files = useResource(`/api/projects/${props["project"]["id"]}/files`);
-  const commands = [["lineage", "Open lineage"], ["documentation", "Search documentation"], ["git", "Open version control"], ["connections", "Manage connections"], ["routing", "Configure environment routing"], ["runs", "Inspect runs and tests"], ["activity", "Show activity"]];
+  const commands = [["metadata", "Inspect file metadata"], ["lineage", "Open lineage"], ["documentation", "Search documentation"], ["git", "Open version control"], ["connections", "Manage connections"], ["routing", "Configure environment routing"], ["runs", "Inspect runs and tests"], ["activity", "Show activity"]];
   const items = [...commands.map(([view, label]) => ({"id": view, "label": label, "view": view})), ...(files["data"]?.["files"] || []).map(file => ({"id": file["path"], "label": file["path"], "path": file["path"]}))].filter(item => item["label"].toLowerCase().includes(search.toLowerCase())).slice(0, 40);
   function showPalette() { setSearch(""); setIndex(0); dialog.current.showModal(); input.current.focus(); }
   function selectItem(item) {
