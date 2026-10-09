@@ -170,7 +170,7 @@
              (when (= id (project-id))
                (patch! {:ui/results (:results data)})
                (when (nil? (:ui/result (current)))
-                 (when-let [result (first (remove #(= "compare" (:kind %)) (:results data)))] (load-result! (:id result))))))) (.catch report-error!)))
+                 (when-let [result (first (remove #(= "compare" (:kind %)) (:results data)))] (load-result! (:id result) 0 true)))))) (.catch report-error!)))
 (defn load-changes! [id]
   (-> (request! "GET" (str "/api/projects/" id "/changes"))
     (.then #(when (= id (project-id)) (patch! {:ui/changes (:changes %)})))
@@ -287,15 +287,17 @@
   (-> (request! "POST" (str "/api/jobs/" id "/cancel") {})
     (.then #(when-not (= "query" (:kind %)) (patch! {:ui/notice (str "Cancellation requested for " (:kind %) ".")})))
     (.catch report-error!)))
-(defn load-result! [id & [offset _keep-editor?]]
-  (let [offset (or offset 0)]
+(defn load-result! [id & [offset background?]]
+  (let [offset (or offset 0) project (project-id)]
     (-> (js/Promise.all #js [(request! "GET" (str "/api/results/" id))
                              (request! "GET" (str "/api/results/" id "/rows?offset=" offset "&limit=10"))])
       (.then (fn [data]
-               (let [result (aget data 0) comparison? (= "compare" (:kind result))]
-                 (patch! (if comparison?
-                           {:ui/compare-result result :ui/compare-page (aget data 1) :ui/bottom-tab "results" :ui/results-view "compare" :ui/error nil}
-                           {:ui/result result :ui/page (aget data 1) :ui/bottom-tab "results" :ui/results-view "data" :ui/compare-result nil :ui/compare-page nil :ui/tab "query" :ui/error nil})))))
+               (when (and (= project (project-id)) (or (not background?) (nil? (:ui/result (current)))))
+                 (let [result (aget data 0) comparison? (= "compare" (:kind result))]
+                   (patch! (if comparison?
+                             {:ui/compare-result result :ui/compare-page (aget data 1) :ui/bottom-tab "results" :ui/results-view "compare" :ui/error nil}
+                             (cond-> {:ui/result result :ui/page (aget data 1)}
+                               (not background?) (assoc :ui/bottom-tab "results" :ui/results-view "data" :ui/compare-result nil :ui/compare-page nil :ui/tab "query" :ui/error nil))))))))
       (.catch report-error!))))
 (defn query-parameters [s]
   (let [input (:ui/parameters s)
@@ -390,6 +392,7 @@
                          ;; current selection here, not the selection at request start.
                          selected-now (:ui/selected-job (current))
                          job (first (filter #(= selected-now (:id %)) jobs))
+                         submitted-job (first (filter #(= (:ui/status-job (current)) (:id %)) jobs))
                          finished (filterv #(and (= "succeeded" (:status %))
                                                  (not (contains? @completed-jobs (:id %)))) jobs)]
                      (entities! :job/id :ui/jobs :id jobs)
@@ -399,12 +402,12 @@
                      (when (and (#{"succeeded" "failed" "cancelled" "interrupted"} (:status job))
                                 (:ui/notice (current)))
                        (patch! {:ui/notice nil}))
-                     ;; Each result opens once automatically. Later navigation is
-                     ;; left alone even while this successful job remains selected.
-                     (when (and (= "succeeded" (:status job)) (:result_id job)
-                                (not (contains? @presented-results (:result_id job))))
-                       (swap! presented-results conj (:result_id job))
-                       (load-result! (:result_id job) 0 (= "query" (:kind job))))))))
+                     ;; Submitted jobs open results once. Selecting recorded Activity
+                     ;; changes its details without navigating away from the panel.
+                     (when (and (= "succeeded" (:status submitted-job)) (:result_id submitted-job)
+                                (not (contains? @presented-results (:result_id submitted-job))))
+                       (swap! presented-results conj (:result_id submitted-job))
+                       (load-result! (:result_id submitted-job)))))))
         (.catch report-error!)
         (.finally #(reset! polling? false)))
       (when selected
@@ -735,7 +738,7 @@
             (map (fn [item]
                    (dom/button #js {:key (:result_id item) :className (str "result-tab " (when (= (:result_id item) (:id result)) "active"))
                                     :aria-pressed (= (:result_id item) (:id result))
-                                    :onClick #(load-result! (:result_id item) 0 true)}
+                                    :onClick #(load-result! (:result_id item))}
                      (icon "model") (str "Result " (:statement_index item) " · " (:row_count item) " rows"))) statements)
             (dom/span #js {:className "result-tab active"} (icon "model") "Results")))
         (when result (dom/span #js {:className "result-count"} (str total " rows")))

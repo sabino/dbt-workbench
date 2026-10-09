@@ -48,6 +48,8 @@ A local federated join across development and baseline connections returned the 
 Saved queries were reopened and exported through the UI.
 A delayed file response check verifies that the last selection wins.
 The active editor pauses during loading. Switching back to a loaded tab cancels the pending selection.
+A delayed result response check verifies that background restoration preserves the selected lower pane.
+Selecting restored Activity records retains their details instead of opening Results automatically.
 
 Comparison uses the current executed result as its left input. The user chooses one other saved result.
 Compare controls appear only under Results. The browser verifies matched rows and prevents comparing a result with itself.
