@@ -194,7 +194,15 @@ export async function verifyEditorWorkflow({page, base, browserBase, output, mod
   await formatRow.getByRole("button", {name: "Save", exact: true}).press("Enter");
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("workbench.command-shortcuts.v1")))).toMatchObject({"format-document": ["Mod+Shift+U"]});
   await page.screenshot({path: join(output, "keyboard-shortcuts.png"), fullPage: true});
-  await page.getByRole("button", {name: "Close command center", exact: true}).click();
+  // Focus can move before the queued dialog close event. The close handler must keep that choice.
+  await page.evaluate(async () => {
+    const dialog = document.querySelector(".command-center-dialog[open]");
+    const closed = new Promise(resolve => dialog.addEventListener("close", () => resolve(), {once: true}));
+    dialog.querySelector(".command-center-close").click();
+    document.querySelector(".file-editor-pane:not([hidden]) .cm-content").focus();
+    await closed;
+  });
+  await expect(input).toBeFocused();
   await replaceEditorContent(page, input, "select  12 as shortcut_probe", modifier);
   await input.press("Alt+Shift+f");
   await expect(input).toHaveText("select  12 as shortcut_probe");

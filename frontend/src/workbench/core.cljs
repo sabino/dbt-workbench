@@ -45,6 +45,7 @@
 (defonce file-load-counter (atom 0))
 (defonce conversion-counter (atom 0))
 (defonce untitled-counter (atom 0))
+(defonce editor-context-counter (atom 0))
 (def initial
   {:ui/inspector nil :ui/bottom-tab "results" :ui/sidebar-collapsed false :ui/sidebar-width 200 :ui/context-width 390 :ui/files-width 290 :ui/file-view "models" :ui/files-search "" :ui/explorer-visible true
    :ui/open-files [] :ui/converting nil :ui/save-dialog nil :ui/always-format false :ui/scratch-visible true :ui/query-conversion nil :ui/query-parameters "{}" :ui/query-saved-content default-sql :ui/query-saved-format "sql"
@@ -53,7 +54,9 @@
    :ui/tab "query" :ui/model-id nil :ui/file nil :ui/loading-file nil :ui/content "" :ui/saved-content ""
    :ui/selected-job nil :ui/events [] :ui/event-cursor 0 :ui/result nil :ui/page nil
    :ui/error nil :ui/notice nil :ui/submitting false :ui/open-path "" :ui/profiles ""
-   :ui/catalog [] :ui/format-options {:keywordCase "upper" :useTabs false :tabWidth 2 :indentStyle "standard" :logicalOperatorNewline "before" :expressionWidth 50 :linesBetweenQueries 2}
+   :ui/catalog [] :ui/editor-context {:resources [] :manifest_available false} :ui/editor-context-loading false :ui/editor-context-error nil
+   :ui/editor-options {:ednMode "paredit" :rainbowEdn false}
+   :ui/format-options {:keywordCase "upper" :useTabs false :tabWidth 2 :indentStyle "standard" :logicalOperatorNewline "before" :expressionWidth 50 :linesBetweenQueries 2}
    :ui/max-rows 10000 :ui/timeout 30 :ui/query-split 50 :ui/query-format "sql" :ui/query-content default-sql
    :ui/parameters "{}" :ui/dialect "duckdb" :ui/baseline-input false
    :ui/editor-revision 0 :ui/query-job nil :ui/query-requesting false :ui/query-selection {:from 0 :to 0 :head 0}
@@ -130,6 +133,19 @@
 (defn save-preference! [key value]
   (try (if value (js/localStorage.setItem key value) (js/localStorage.removeItem key))
        (catch :default _ nil)))
+(defn save-editor-options! [options]
+  (let [validated {:ednMode (if (#{"paredit" "parinfer" "plain"} (:ednMode options)) (:ednMode options) "paredit")
+                   :rainbowEdn (true? (:rainbowEdn options))}]
+    (patch! {:ui/editor-options validated})
+    (save-preference! "workbench.editor-options" (pr-str validated))))
+(defn load-editor-options! []
+  (try
+    (when-let [saved (read-preference "workbench.editor-options")]
+      (let [options (reader/read-string saved)]
+        (when (map? options)
+          (patch! {:ui/editor-options {:ednMode (if (#{"paredit" "parinfer" "plain"} (:ednMode options)) (:ednMode options) "paredit")
+                                      :rainbowEdn (true? (:rainbowEdn options))}}))))
+    (catch :default _ nil)))
 (def layout-limits
   {:ui/sidebar-width [160 300] :ui/context-width [280 780] :ui/files-width [220 600]
    :ui/query-split [25 75]})
@@ -164,15 +180,29 @@
 (defn choose-project! []
   (when (may-discard?)
     (swap! file-load-counter inc)
+    (swap! editor-context-counter inc)
     (save-preference! "workbench.project" nil)
     (patch! {:ui/project nil :ui/file nil :ui/loading-file nil :ui/open-files [] :ui/model-id nil :ui/inspector nil :ui/error nil :ui/notice nil :ui/content "" :ui/saved-content ""
+             :ui/editor-context {:resources [] :manifest_available false} :ui/editor-context-loading false :ui/editor-context-error nil
              :ui/converting nil :ui/save-dialog nil :ui/submitting false :ui/query-content default-sql :ui/query-saved-content default-sql :ui/query-saved-format "sql"
              :ui/query-format "sql" :ui/query-conversion nil :ui/query-parameters "{}" :ui/parameters "{}" :ui/scratch-visible true
              :ui/query-selection {:from 0 :to 0 :head 0} :ui/editor-revision (inc (:ui/editor-revision (current)))})))
 (defn load-projects! []
   (-> (request! "GET" "/api/projects")
     (.then #(patch! {:ui/projects (:projects %)})) (.catch report-error!)))
+(defn load-editor-context! [id]
+  (let [request-id (swap! editor-context-counter inc)]
+    (patch! {:ui/editor-context-loading true :ui/editor-context-error nil})
+    (-> (request! "GET" (str "/api/projects/" id "/editor-context"))
+        (.then (fn [context]
+                 (when (and (= id (project-id)) (= request-id @editor-context-counter))
+                   (patch! {:ui/editor-context context :ui/editor-context-loading false}))))
+        (.catch (fn [error]
+                  (when (and (= id (project-id)) (= request-id @editor-context-counter))
+                    (patch! {:ui/editor-context {:resources [] :manifest_available false}
+                             :ui/editor-context-loading false :ui/editor-context-error (.-message error)})))))))
 (defn load-models! [id]
+  (load-editor-context! id)
   (-> (request! "GET" (str "/api/projects/" id "/models"))
     (.then (fn [data]
              (when (= id (project-id))
@@ -200,8 +230,10 @@
 (defn load-project! [id]
   (when (may-discard?)
     (swap! file-load-counter inc)
+    (swap! editor-context-counter inc)
     (patch! {:ui/error nil :ui/notice nil :ui/file nil :ui/loading-file nil :ui/content "" :ui/saved-content ""
            :ui/open-files [] :ui/converting nil :ui/save-dialog nil :ui/submitting false :ui/scratch-visible true
+           :ui/editor-context {:resources [] :manifest_available false} :ui/editor-context-loading false :ui/editor-context-error nil
            :ui/query-content default-sql :ui/query-saved-content default-sql :ui/query-saved-format "sql" :ui/query-format "sql" :ui/query-conversion nil :ui/query-parameters "{}" :ui/parameters "{}"
            :ui/query-selection {:from 0 :to 0 :head 0} :ui/editor-revision (inc (:ui/editor-revision (current)))
            :ui/inspector nil :ui/bottom-tab "results" :ui/status-job nil :ui/compare-result nil :ui/models [] :ui/jobs [] :ui/events [] :ui/event-cursor 0 :ui/selected-job nil :ui/query-job nil :ui/query-requesting false
@@ -416,9 +448,11 @@
 (defn select-job! [id]
   (patch! {:ui/selected-job id :ui/events [] :ui/event-cursor 0}))
 (defn cancel-job! [id]
-  (-> (request! "POST" (str "/api/jobs/" id "/cancel") {})
-    (.then #(when-not (= "query" (:kind %)) (patch! {:ui/notice (str "Cancellation requested for " (:kind %) ".")})))
-    (.catch report-error!)))
+  (let [project (project-id)]
+    (-> (request! "POST" (str "/api/jobs/" id "/cancel") {})
+      (.then (fn [_]
+               (when (= project (project-id)) (patch! {:ui/status-job id :ui/notice nil}))))
+      (.catch report-error!))))
 (defn load-result! [id & [offset background?]]
   (let [offset (or offset 0) project (project-id)]
     (-> (js/Promise.all #js [(request! "GET" (str "/api/results/" id))
@@ -511,6 +545,8 @@
   (let [document (read-editor-document s) mode (:mode document) file (:ui/file s)
         opened (first (filter #(= (:path file) (:path %)) (:ui/open-files s)))
         blocked? (boolean (or (:read_only file) (:ui/loading-file s) (:ui/submitting s) (:ui/converting s)))
+        navigating? (not (or (:ui/loading-file s) (:ui/converting s)))
+        edn? (= "edn" mode)
         template? (boolean (re-find #"\{[\{%]" (:content document)))
         command (fn [id label category enabled run] {:id id :label label :category category :enabled (boolean enabled) :run run})]
     [(command "new-file" "New file" "File" true #(new-file!))
@@ -519,6 +555,23 @@
      (command "run-query" "Run statement or selection" "Query" (and (#{"sql" "edn"} mode) (not blocked?)) #(run-query! false))
      (command "run-all" "Run all statements" "Query" (and (= mode "sql") (not blocked?) (not template?)) #(run-query! true))
      (command "format-document" "Format document" "Editor" (and (#{"sql" "edn"} mode) (not blocked?) (not template?)) format-query!)
+     (command "trigger-completion" "Complete at cursor" "Editor" (and (#{"sql" "edn"} mode) (not blocked?)) #(editor/runEditorCommand "trigger-completion"))
+     (command "editor-documentation" "Show documentation at cursor" "Editor" navigating? #(editor/runEditorCommand "show-documentation"))
+     (command "goto-definition" "Go to definition" "Editor" navigating? #(editor/runEditorCommand "goto-definition"))
+     (command "edn-forward" "EDN: move forward one form" "EDN navigation" (and edn? navigating?) #(editor/runEditorCommand "edn-forward"))
+     (command "edn-backward" "EDN: move backward one form" "EDN navigation" (and edn? navigating?) #(editor/runEditorCommand "edn-backward"))
+     (command "edn-up" "EDN: move out of form" "EDN navigation" (and edn? navigating?) #(editor/runEditorCommand "edn-up"))
+     (command "edn-down" "EDN: move into form" "EDN navigation" (and edn? navigating?) #(editor/runEditorCommand "edn-down"))
+     (command "edn-select-expand" "EDN: expand selection" "EDN navigation" (and edn? navigating?) #(editor/runEditorCommand "edn-select-expand"))
+     (command "edn-select-contract" "EDN: contract selection" "EDN navigation" (and edn? navigating?) #(editor/runEditorCommand "edn-select-contract"))
+     (command "edn-slurp-forward" "EDN: slurp next form" "EDN editing" (and edn? (not blocked?)) #(editor/runEditorCommand "edn-slurp-forward"))
+     (command "edn-barf-forward" "EDN: barf last form" "EDN editing" (and edn? (not blocked?)) #(editor/runEditorCommand "edn-barf-forward"))
+     (command "edn-slurp-backward" "EDN: slurp previous form" "EDN editing" (and edn? (not blocked?)) #(editor/runEditorCommand "edn-slurp-backward"))
+     (command "edn-barf-backward" "EDN: barf first form" "EDN editing" (and edn? (not blocked?)) #(editor/runEditorCommand "edn-barf-backward"))
+     (command "edn-wrap-vector" "EDN: wrap in vector" "EDN editing" (and edn? (not blocked?)) #(editor/runEditorCommand "edn-wrap-vector"))
+     (command "edn-wrap-map" "EDN: wrap in map" "EDN editing" (and edn? (not blocked?)) #(editor/runEditorCommand "edn-wrap-map"))
+     (command "edn-wrap-list" "EDN: wrap in list" "EDN editing" (and edn? (not blocked?)) #(editor/runEditorCommand "edn-wrap-list"))
+     (command "edn-splice" "EDN: splice enclosing form" "EDN editing" (and edn? (not blocked?)) #(editor/runEditorCommand "edn-splice"))
      (command "switch-sql" "Translate query to SQL" "Editor" (not blocked?) #(select-editor-mode! "sql"))
      (command "switch-edn" "Translate query to EDN" "Editor" (not blocked?) #(select-editor-mode! "edn"))
      (command "preview-model" "Preview model" "dbt" (and (:ui/model-id s) (not (file-dirty? opened)) (not blocked?)) run-preview!)
@@ -565,10 +618,6 @@
         (.then (fn [data]
                  (when (= id (project-id))
                    (let [jobs (:jobs data)
-                         ;; A job may finish before its first status poll. Inspect the
-                         ;; current selection here, not the selection at request start.
-                         selected-now (:ui/selected-job (current))
-                         job (first (filter #(= selected-now (:id %)) jobs))
                          submitted-job (first (filter #(= (:ui/status-job (current)) (:id %)) jobs))
                          finished (filterv #(and (= "succeeded" (:status %))
                                                  (not (contains? @completed-jobs (:id %)))) jobs)]
@@ -576,9 +625,6 @@
                      (when (seq finished)
                        (swap! completed-jobs into (map :id finished))
                        (refresh-project!))
-                     (when (and (#{"succeeded" "failed" "cancelled" "interrupted"} (:status job))
-                                (:ui/notice (current)))
-                       (patch! {:ui/notice nil}))
                      ;; Submitted jobs open results once. Selecting recorded Activity
                      ;; changes its details without navigating away from the panel.
                      (when (and (= "succeeded" (:status submitted-job)) (:result_id submitted-job)
@@ -793,6 +839,28 @@
                                        (patch! {:ui/always-format enabled}) (save-preference! "workbench.always-format" (str enabled)))})
           "Always format on mode switch")
         (dom/p #js {:className "hint"} "Preferences are saved in this browser. Format applies them to the active document.")) "button small")))
+(defn editor-preferences [props]
+  (let [options (:ui/editor-options props) context (:ui/editor-context props)]
+    (floating-menu "Editor settings" "Editor" "editor-preferences-menu"
+      (dom/div {}
+        (dom/h3 {} "Editor")
+        (field-label "EDN editing mode"
+          (dom/select #js {:aria-label "EDN editing mode" :value (:ednMode options)
+                          :onChange #(save-editor-options! (assoc (:ui/editor-options (current)) :ednMode (.. % -target -value)))}
+            (dom/option #js {:value "paredit"} "Paredit: edit balanced forms")
+            (dom/option #js {:value "parinfer"} "Parinfer: infer structure from indentation")
+            (dom/option #js {:value "plain"} "Plain: standard text editing")))
+        (dom/label #js {:className "check-control"}
+          (dom/input #js {:type "checkbox" :checked (boolean (:rainbowEdn options)) :aria-label "Rainbow EDN delimiters"
+                          :onChange #(save-editor-options! (assoc (:ui/editor-options (current)) :rainbowEdn (.. % -target -checked)))})
+          "Rainbow EDN delimiters")
+        (dom/p #js {:className "hint"} "These preferences apply in this browser. Changing settings preserves the buffer. Typing and structural editing can change it.")
+        (dom/p #js {:className "hint"} "Use Complete at cursor, Show documentation at cursor, or Go to definition from the command center. Keyboard shortcuts are configurable.")
+        (dom/p #js {:className "hint"} "Project completions and reference hints use recorded manifest metadata. Parse the project to refresh models, sources, macros, and columns.")
+        (cond
+          (:ui/editor-context-loading props) (dom/p #js {:className "hint" :role "status"} "Loading project editor metadata…")
+          (:ui/editor-context-error props) (dom/p #js {:className "hint" :role "status"} (str "Project editor metadata unavailable: " (:ui/editor-context-error props)))
+          (:empty_reason context) (dom/p #js {:className "hint" :role "status"} (:empty_reason context)))) "button small")))
 
 (defn render-document-tabs [props]
   (dom/nav #js {:className "file-tabs" :aria-label "Open files"}
@@ -811,11 +879,13 @@
     (dom/button #js {:className "new-file-tab icon-button" :aria-label "New file" :title "New file" :onClick #(new-file!)} (icon "plus"))))
 
 (defn render-document-editors [props]
-  (let [schema (clj->js (into {} (map (fn [relation] [(:name relation) (mapv :name (:columns relation))]) (:ui/catalog props))))]
+  (let [schema (clj->js (into {} (map (fn [relation] [(:name relation) (:columns relation)]) (:ui/catalog props))))
+        intelligence (clj->js (:ui/editor-context props)) options (clj->js (:ui/editor-options props))]
     (dom/div #js {:className "file-editor-panes"}
       (dom/div #js {:key "scratch-query" :className "file-editor-pane" :hidden (boolean (:ui/file props))}
         (react/createElement editor/QueryEditor
           #js {:key (:ui/editor-revision props) :value (:ui/query-content props) :format (:ui/query-format props) :schema schema
+               :intelligence intelligence :options options :dialect (:ui/dialect props) :onNavigate load-file!
                :readOnly (boolean (or (:ui/loading-file props) (= "scratch-query" (get-in props [:ui/converting :key]))))
                :onChange #(patch! {:ui/query-content %})
                :onSelection #(patch! {:ui/query-selection (js->clj % :keywordize-keys true)})
@@ -824,6 +894,7 @@
              (dom/div #js {:key (:editor-id file (:path file)) :className "file-editor-pane" :hidden (not= (:path file) (get-in props [:ui/file :path]))}
                (react/createElement editor/QueryEditor
                  #js {:value (:draft file) :format (resolve-file-format file) :schema schema :label "File editor" :file true
+                      :intelligence intelligence :options options :dialect (:ui/dialect props) :onNavigate load-file!
                       :readOnly (boolean (or (:read_only file) (:ui/loading-file props) (= (:path file) (get-in props [:ui/converting :key])))) :selection (clj->js (:selection file {:from 0 :to 0 :head 0}))
                       :onSelection #(update-file-selection! (:path file) %)
                       :onChange #(update-file-content! (:path file) %) :onSave save-file!
@@ -849,6 +920,7 @@
           (dom/div #js {:className "query-run-actions"}
             (button "Format" format-query! "small" (or blocked? (= "text" mode) template?))
             (format-preferences props)
+            (editor-preferences props)
             (react/createElement query-library/QueryLibrary
               #js {:key (get-in props [:ui/project :id]) :projectId (get-in props [:ui/project :id])
                    :query (clj->js {:content (:content document) :format mode
@@ -1094,7 +1166,8 @@
            :ui/tab :ui/model-id :ui/file :ui/loading-file :ui/content :ui/saved-content :ui/selected-job
            :ui/events :ui/event-cursor :ui/result :ui/page :ui/error :ui/notice :ui/submitting
            :ui/open-path :ui/profiles :ui/query-format :ui/query-content :ui/parameters
-           :ui/catalog :ui/format-options :ui/editor-revision :ui/query-job :ui/query-requesting :ui/query-selection :ui/build-scope :ui/changes :ui/job-filter
+           :ui/catalog :ui/editor-context :ui/editor-context-loading :ui/editor-context-error :ui/editor-options
+           :ui/format-options :ui/editor-revision :ui/query-job :ui/query-requesting :ui/query-selection :ui/build-scope :ui/changes :ui/job-filter
            :ui/dialect :ui/baseline-input :ui/right-result :ui/compare-keys :ui/conflict :ui/artifact-dir :ui/reference-target
            {:ui/models (comp/get-query ModelRow)} {:ui/jobs (comp/get-query JobRow)}]
    :initial-state (fn [_] initial)}
@@ -1168,6 +1241,7 @@
 (defn ^:export init []
   (refresh)
   (load-layout!)
+  (load-editor-options!)
   (patch! {:ui/always-format (= "true" (read-preference "workbench.always-format"))})
   (try (when-let [saved (js/localStorage.getItem "workbench.sql-format-options")] (patch! {:ui/format-options (merge (:ui/format-options initial) (js->clj (js/JSON.parse saved) :keywordize-keys true))})) (catch :default _ nil))
   (let [saved-theme (read-preference "workbench.theme")

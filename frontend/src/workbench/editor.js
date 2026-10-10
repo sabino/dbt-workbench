@@ -1,11 +1,61 @@
 import React from "react";
-import {clojure} from "@nextjournal/lang-clojure";
-import {EditorState, Compartment} from "@codemirror/state";
-import {EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, Decoration, ViewPlugin} from "@codemirror/view";
+import {EditorState, Compartment, StateEffect, StateField} from "@codemirror/state";
+import {EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, Decoration, ViewPlugin, hoverTooltip, showTooltip} from "@codemirror/view";
 import {defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory} from "@codemirror/commands";
-import {autocompletion, closeBrackets, closeBracketsKeymap} from "@codemirror/autocomplete";
-import {sql, PostgreSQL} from "@codemirror/lang-sql";
+import {autocompletion, closeBrackets, closeBracketsKeymap, startCompletion, closeCompletion} from "@codemirror/autocomplete";
+import {sql, PostgreSQL, StandardSQL, SQLite, keywordCompletionSource} from "@codemirror/lang-sql";
 import {HighlightStyle, syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput} from "@codemirror/language";
+import {createEdnExtensions, runEdnCommand} from "./edn-structure.js";
+import {buildEditorIndex, createProjectCompletionSource, readEditorReference, readTemplateHighlights, renderEditorDocumentation} from "./editor-intelligence.js";
+
+const editors = new WeakMap();
+const documentationEffect = StateEffect.define();
+const documentation = StateField.define({
+  create() { return null; },
+  update(value, transaction) {
+    if (transaction.docChanged || transaction.selection) value = null;
+    for (const effect of transaction.effects) if (effect.is(documentationEffect)) value = effect.value;
+    return value;
+  },
+  provide: field => showTooltip.compute([field], state => state.field(field))
+});
+
+function readVisibleEditor() {
+  const dom = document.querySelector(".main-pane .file-editor-pane:not([hidden]) .cm-editor");
+  return dom ? editors.get(dom) : null;
+}
+
+function showEditorDocumentation(editor, entry) {
+  const {view, callbacks} = editor;
+  const fallback = {title: "Editor help", description: entry ? "This reference has no local definition." : callbacks.current["intelligence"]?.["empty_reason"] || "Place the cursor on a model, field, macro, dbt function, or HoneySQL keyword."};
+  const description = entry || fallback;
+  view.dispatch({effects: documentationEffect.of({pos: entry?.from ?? view.state.selection.main.head,
+    end: entry?.to, above: true, create: () => ({dom: renderEditorDocumentation(description, path => {
+      view.dispatch({effects: documentationEffect.of(null)});
+      callbacks.current["onNavigate"]?.(path);
+    })})})});
+  return true;
+}
+
+export function runEditorCommand(name) {
+  const editor = readVisibleEditor();
+  if (!editor) return false;
+  const {view, callbacks, index} = editor;
+  const props = callbacks.current;
+  view.focus();
+  if (name === "trigger-completion") return !view.state.readOnly && startCompletion(view);
+  if (name.startsWith("edn-")) {
+    if (props["format"] !== "edn") return false;
+    const navigation = new Set(["edn-forward", "edn-backward", "edn-up", "edn-down", "edn-select-expand", "edn-select-contract"]);
+    if (view.state.readOnly && !navigation.has(name)) return false;
+    closeCompletion(view);
+    return runEdnCommand(view, name);
+  }
+  const entry = readEditorReference(view.state.doc.toString(), view.state.selection.main.head, props["format"], index.current);
+  if (name === "goto-definition" && entry?.path) { props["onNavigate"]?.(entry.path); return true; }
+  if (name === "show-documentation" || name === "goto-definition") return showEditorDocumentation(editor, entry);
+  return false;
+}
 
 function isLetter(char) { return Boolean(char) && ((char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || char === "_"); }
 function isWord(char) { return isLetter(char) || Boolean(char && char >= "0" && char <= "9"); }
@@ -96,25 +146,20 @@ export function focusQueryEditor() {
   document.querySelector(".main-pane .file-editor-pane:not([hidden]) .cm-content")?.focus();
 }
 
-function completeDbt(context) {
-  const word = context["matchBefore"](/\w*/);
-  if (!word || (!context["explicit"] && word["from"] === word["to"])) return null;
-  return {"from": word["from"], "options": [
-    {"label": "source", "type": "function", "detail": "dbt function", "info": "source(name, table): reference a declared source relation. Example: {{ source('jaffle_shop', 'customers') }}"},
-    {"label": "ref", "type": "function", "detail": "dbt function", "info": "ref(model): reference a dbt model and track its dependency. Example: {{ ref('stg_customers') }}"},
-    {"label": "config", "type": "function", "detail": "dbt function", "info": "Configure this model, such as materialized='view'."},
-    {"label": "var", "type": "function", "detail": "dbt function", "info": "Read a variable from dbt project configuration."},
-    {"label": "env_var", "type": "function", "detail": "dbt function", "info": "Read an environment variable during dbt compilation."},
-    {"label": "this", "type": "variable", "detail": "dbt relation", "info": "The relation corresponding to this model."},
-    {"label": "is_incremental", "type": "function", "detail": "dbt function", "info": "Whether this run is an incremental model update."}
-  ]};
-}
-
-function createLanguage(props) {
+function createLanguage(props, index) {
   if (props["format"] === "text") return [];
-  if (props["format"] !== "sql") return clojure();
-  const support = sql({dialect: PostgreSQL, schema: props["schema"] || {}});
-  return props["file"] ? [support, support.language.data.of({"autocomplete": completeDbt})] : support;
+  const source = createProjectCompletionSource(index, props["format"]);
+  if (props["format"] === "edn") return [createEdnExtensions(props["options"]), autocompletion({override: [source], icons: false})];
+  const dialect = props["dialect"] === "snowflake" ? StandardSQL : props["dialect"] === "sqlite" ? SQLite : PostgreSQL;
+  const keywords = keywordCompletionSource(dialect, true);
+  return [sql({dialect}), closeBrackets(),
+    autocompletion({icons: false, override: [context => {
+      const completion = source(context);
+      if (completion?.template) return completion;
+      const keyword = keywords(context);
+      if (!completion) return keyword;
+      return {...completion, options: [...completion.options, ...(keyword?.options || [])]};
+    }]})];
 }
 
 export function QueryEditor(props) {
@@ -125,9 +170,16 @@ export function QueryEditor(props) {
   const language = React.useRef(new Compartment());
   const readOnly = React.useRef(new Compartment());
   const attributes = React.useRef(new Compartment());
+  const intelligence = React.useRef(new Compartment());
   const representations = React.useRef(new Map());
   const activeMode = React.useRef(props["format"]);
   const schema = JSON.stringify(props["schema"] || {});
+  const metadata = JSON.stringify(props["intelligence"] || {});
+  const options = JSON.stringify(props["options"] || {});
+  const index = React.useRef(null);
+  const configuration = React.useRef("");
+  const currentConfiguration = JSON.stringify([props["format"], props["readOnly"], props["label"], props["dialect"], schema, metadata, options]);
+  if (configuration.current !== currentConfiguration) index.current = buildEditorIndex(props["intelligence"], props["schema"]);
   function readSelection() {
     const selection = props["selection"] || {"from": 0, "to": 0, "head": 0};
     return {"anchor": Math.min(selection["head"] === selection["from"] ? selection["to"] : selection["from"], props["value"].length),
@@ -149,19 +201,57 @@ export function QueryEditor(props) {
     return Decoration.set(Array.from({length: lastLine - firstLine + 1}, (_, index) =>
       Decoration.line({class: "active-statement"}).range(document["line"](firstLine + index)["from"])));
   }
+  function createIntelligenceExtensions() {
+    return [hoverTooltip((editor, position, side) => {
+      const entry = readEditorReference(editor.state.doc.toString(), position, callbacks.current["format"], index.current);
+      if (!entry || position === entry.from && side < 0 || position === entry.to && side > 0) return null;
+      return {pos: entry.from, end: entry.to, above: true, create: () => ({dom: renderEditorDocumentation(entry, path => callbacks.current["onNavigate"]?.(path))})};
+    }, {hoverTime: 350}),
+    ViewPlugin.define(editor => {
+      function decorate() {
+        if (callbacks.current["format"] !== "sql") return Decoration.none;
+        return Decoration.set(readTemplateHighlights(editor.state.doc.toString()).filter(part => part.to > part.from)
+          .map(part => Decoration.mark({class: part.className}).range(part.from, part.to)), true);
+      }
+      return {decorations: decorate(), update(update) { if (update.docChanged) this.decorations = decorate(); }};
+    }, {decorations: plugin => plugin.decorations}),
+    EditorView.domEventHandlers({
+      mousemove(event, editor) {
+        const position = editor.posAtCoords({x: event.clientX, y: event.clientY});
+        const entry = (event.ctrlKey || event.metaKey) && position !== null ? readEditorReference(editor.state.doc.toString(), position, callbacks.current["format"], index.current) : null;
+        editor.dom.classList.toggle("editor-definition-link", Boolean(entry?.path));
+      },
+      mouseleave(_event, editor) { editor.dom.classList.remove("editor-definition-link"); },
+      mousedown(event, editor) {
+        if (event.button !== 0 || !(event.ctrlKey || event.metaKey)) return false;
+        const position = editor.posAtCoords({x: event.clientX, y: event.clientY});
+        if (position === null) return false;
+        const entry = readEditorReference(editor.state.doc.toString(), position, callbacks.current["format"], index.current);
+        if (!entry?.path) return false;
+        event.preventDefault();
+        callbacks.current["onNavigate"]?.(entry.path);
+        return true;
+      }
+    })];
+  }
   function createEditorState() {
     return EditorState.create({doc: props["value"], selection: readSelection(), extensions: [
         EditorView.lineWrapping, lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), drawSelection(),
-        history(), bracketMatching(), closeBrackets(), autocompletion({icons: false}), indentOnInput(), syntaxHighlighting(queryHighlightStyle),
+        history(), bracketMatching(), indentOnInput(), syntaxHighlighting(queryHighlightStyle), documentation,
         ViewPlugin.define(function decorateStatement(editor) {
           return {decorations: highlightStatement(editor), update: function updateHighlight(update) {
             this.decorations = highlightStatement(update["view"]);
           }};
         }, {decorations: function getDecorations(plugin) { return plugin.decorations; }}),
-        language.current.of(createLanguage(props)),
+        language.current.of(createLanguage(props, index.current)),
+        intelligence.current.of(createIntelligenceExtensions()),
         readOnly.current.of(readOnlyExtensions()),
         attributes.current.of(EditorView.contentAttributes.of({"aria-label": props["label"] || "Query editor", "spellcheck": "false"})),
-        keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+        keymap.of([{key: "Escape", run: editor => {
+          if (!editor.state.field(documentation)) return false;
+          editor.dispatch({effects: documentationEffect.of(null)});
+          return true;
+        }}, ...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
         EditorView.updateListener.of(function updateEditor(update) {
           if (update["docChanged"]) callbacks.current["onChange"](update["state"]["doc"].toString());
           if (update["selectionSet"] || update["docChanged"]) {
@@ -174,15 +264,18 @@ export function QueryEditor(props) {
   React.useLayoutEffect(function mountEditor() {
     const editor = new EditorView({parent: host.current, state: createEditorState()});
     view.current = editor;
-    return function destroyEditor() { editor["destroy"](); view.current = null; };
+    configuration.current = currentConfiguration;
+    editors.set(editor.dom, {view: editor, callbacks, index});
+    return function destroyEditor() { editors.delete(editor.dom); editor["destroy"](); view.current = null; };
   }, []);
   React.useLayoutEffect(function updateRepresentation() {
     const editor = view.current;
     if (!editor) return;
     const modeChanged = activeMode.current !== props["format"];
-    const effects = [language.current["reconfigure"](createLanguage(props)),
+    const effects = modeChanged || configuration.current !== currentConfiguration ? [language.current["reconfigure"](createLanguage(props, index.current)),
+      intelligence.current["reconfigure"](createIntelligenceExtensions()),
       readOnly.current["reconfigure"](readOnlyExtensions()),
-      attributes.current["reconfigure"](EditorView.contentAttributes.of({"aria-label": props["label"] || "Query editor", "spellcheck": "false"}))];
+      attributes.current["reconfigure"](EditorView.contentAttributes.of({"aria-label": props["label"] || "Query editor", "spellcheck": "false"}))] : [];
     if (modeChanged) {
       // Each representation owns its undo history; viewing EDN never inserts EDN into SQL history.
       representations.current.set(activeMode.current, {"state": editor["state"], "scrollTop": editor["scrollDOM"]["scrollTop"]});
@@ -197,8 +290,9 @@ export function QueryEditor(props) {
     } else {
       const changes = editor["state"]["doc"].toString() !== props["value"]
         ? {"changes": {"from": 0, "to": editor["state"]["doc"].length, "insert": props["value"]}, "selection": readSelection()} : {};
-      editor["dispatch"]({...changes, "effects": effects});
+      if (changes.changes || effects.length) editor["dispatch"]({...changes, "effects": effects});
     }
-  }, [props["value"], props["format"], props["readOnly"], props["label"], schema]);
+    configuration.current = currentConfiguration;
+  }, [props["value"], currentConfiguration]);
   return React.createElement("div", {ref: host, className: "query-code-editor"});
 }

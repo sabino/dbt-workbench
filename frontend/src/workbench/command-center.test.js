@@ -132,3 +132,30 @@ test("shortcut capture preserves Tab navigation and Escape dismissal", function 
   expect(captureShortcut(eventFor("s", {"metaKey": true, "altKey": true}))).toBe("Mod+Alt+S");
   expect(captureShortcut(eventFor("s", {"metaKey": true, "isComposing": true}))).toBeNull();
 });
+
+test("editor intelligence defaults remain separate from project documentation", function verifyIntelligenceBindings() {
+  const keymap = resolveShortcutKeymap();
+  expect(keymap["trigger-completion"]).toEqual(["Ctrl+Space"]);
+  expect(keymap["editor-documentation"]).toEqual(["Ctrl+Shift+Space"]);
+  expect(keymap["show-documentation"]).toEqual([]);
+  expect(keymap["goto-definition"]).toEqual(["F12"]);
+  expect(validateShortcutAssignment("goto-definition", "F12")["valid"]).toBe(true);
+  expect(validateShortcutAssignment("save-file", "F12", {"goto-definition": []})["valid"]).toBe(false);
+  expect(readShortcutOverrides({"getItem": () => JSON.stringify({"goto-definition": ["F12"]})})).toEqual({"goto-definition": ["F12"]});
+  expect(keymap["edn-slurp-backward"]).toEqual(["Ctrl+Alt+Shift+ArrowRight"]);
+  expect(keymap["edn-wrap-map"]).toEqual([]);
+  expect(validateShortcutAssignment("edn-splice", "Mod+Alt+J")["valid"]).toBe(true);
+});
+
+test("editor intelligence hotkeys require editor focus and enabled active-mode actions", function verifyEditorFocus() {
+  const commands = [{"id": "edn-forward", "enabled": true, "run": () => {}}, {"id": "goto-definition", "enabled": true, "run": () => {}}, {"id": "trigger-completion", "enabled": true, "run": () => {}}];
+  const forward = eventFor("ArrowRight", {"altKey": true});
+  expect(resolveCommandForEvent(forward, commands)).toBeNull();
+  expect(resolveCommandForEvent(forward, commands, {}, {"editorFocused": true})).toBe("edn-forward");
+  expect(resolveCommandForEvent(forward, [{"id": "edn-forward", "enabled": false, "run": () => {}}], {}, {"editorFocused": true})).toBeNull();
+  expect(resolveCommandForEvent(eventFor("ArrowRight", {"ctrlKey": true}), commands, {}, {"editorFocused": true})).toBeNull();
+  expect(resolveCommandForEvent(eventFor("F12"), commands)).toBeNull();
+  expect(resolveCommandForEvent(eventFor("F12"), commands, {}, {"editorFocused": true})).toBe("goto-definition");
+  expect(resolveCommandForEvent(eventFor(" ", {"ctrlKey": true}), commands, {}, {"editorFocused": true})).toBe("trigger-completion");
+  expect(resolveCommandForEvent(eventFor(" ", {"ctrlKey": true}), commands, {}, {"editorFocused": true, "dialogOpen": true})).toBeNull();
+});

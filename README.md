@@ -37,6 +37,7 @@ The right Files pane contains the explorer.
 | --- | --- |
 | Edit project files or create untitled drafts with safe saves | Query lab > File tabs |
 | Find files, run commands, or assign shortcuts | Header > Search files and commands |
+| Complete references, inspect documentation, and open definitions | Query lab > SQL or EDN editor |
 | Run SQL or HoneySQL EDN queries | Query lab |
 | Inspect rows, charts, SQL, and provenance | Results |
 | Compare the current result with a saved result | Results > Compare |
@@ -52,7 +53,13 @@ The right Files pane contains the explorer.
 
 ## Query lab
 
-CodeMirror provides highlighting, completion, bracket matching, line numbers, and undo.
+CodeMirror provides project-aware completion, documentation hover, definition navigation, highlighting, and undo.
+Use Ctrl+Space for suggestions, Ctrl+Shift+Space for documentation, and Ctrl/Cmd-click or F12 to open a resolved definition.
+SQL template blocks complete dbt `ref`, `source`, functions, and project macros.
+EDN completes HoneySQL clauses, expressions, relation keywords, and known fields.
+**Editor** settings select Paredit, Parinfer, or plain EDN editing. Paredit is the default; rainbow delimiters are optional.
+Project metadata comes from local declarations and recorded artifacts. The editor-context endpoint makes no warehouse calls.
+See [editor workflows and structural shortcuts](docs/editor.md) for details.
 **Run all** executes statements in order and stops at the first error.
 Semicolons inside strings and comments do not split statements.
 Query lab stays mounted when you switch project views or lower tabs.
@@ -125,7 +132,7 @@ Use the header's **Search files and commands** control to open the command cente
 Use arrow keys to choose an entry, Enter to open it, and Escape to close the dialog.
 Open **Keyboard shortcuts** from the command center to assign keys, clear bindings, or restore defaults.
 Assignments reject conflicting bindings and reserved browser or editing shortcuts.
-Shortcuts and formatting settings stay in this browser.
+Shortcuts, formatting, and Editor settings stay in this browser.
 
 ## Projects and connections
 
@@ -189,7 +196,7 @@ The build writes to `resources/static/js`. Browser tests use an isolated tempora
 Install Chromium with `bun node_modules/playwright/cli.js install chromium` when needed.
 Run backend checks from the repository root with `clojure -M:test`.
 
-See [architecture](docs/architecture.md), [API](docs/api.md), [limits](docs/limitations.md),
+See [editor help](docs/editor.md), [architecture](docs/architecture.md), [API](docs/api.md), [limits](docs/limitations.md),
 [extension points](docs/roadmap.md), and [verification](docs/verification.md).
 External-service support and verified external execution are separate claims. Consult the verification record before relying on either.
 Historical [workbench spikes](workbench-spikes/README.md) remain separate from the application runtime.

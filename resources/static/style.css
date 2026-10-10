@@ -498,6 +498,34 @@ kbd { padding: 5px 7px; background: var(--subtle); border-radius: 4px; font: 11p
 .file-editor-panes, .file-editor-pane { display: flex; flex: 1; min-height: 0; }
 [hidden] { display: none !important; }
 .query-code-editor .cm-completionInfo { background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; max-width: 300px; font: 12px/1.7 var(--sans); }
+.query-code-editor .cm-tooltip-autocomplete > ul { max-width: min(420px, calc(100vw - 24px)); }
+.query-code-editor .cm-tooltip-autocomplete > ul > li { overflow: hidden; text-overflow: ellipsis; }
+.query-code-editor .editor-definition-link .cm-content { cursor: pointer; }
+.query-code-editor .syntax-template { color: var(--muted); }
+.query-code-editor .syntax-template-function { color: var(--syntax-keyword); }
+.query-code-editor .syntax-template-string { color: var(--syntax-string); }
+.editor-documentation { width: min(320px, calc(100vw - 32px)); max-height: min(380px, 50dvh); overflow: auto; padding: 12px 14px; font: 12px/1.6 var(--sans); }
+.editor-documentation > strong { display: block; font-size: 13px; color: var(--ink); }
+.editor-documentation > code { display: block; overflow-wrap: anywhere; color: var(--syntax-function); font: 11px/1.6 var(--mono); margin: 4px 0 8px; }
+.editor-documentation-kind, .editor-documentation > small { display: block; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.editor-documentation p { margin: 8px 0; }
+.editor-documentation pre { margin: 8px 0; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.65 var(--mono); color: var(--syntax-string); }
+.editor-documentation-columns { white-space: pre-line; font: 11px/1.7 var(--mono); color: var(--muted); }
+.editor-documentation-type { font: 11px var(--mono); color: var(--syntax-function); }
+.editor-documentation a { display: block; margin-top: 8px; color: var(--accent); }
+.editor-documentation .button { margin-top: 8px; }
+.edn-bracket-0 { color: #936122 !important; }
+.edn-bracket-1 { color: #7555a2 !important; }
+.edn-bracket-2 { color: #16788a !important; }
+.edn-bracket-3 { color: #ae4874 !important; }
+.edn-bracket-4 { color: #327459 !important; }
+.edn-bracket-5 { color: #476dc0 !important; }
+[data-theme="dark"] .edn-bracket-0 { color: #ebc77b !important; }
+[data-theme="dark"] .edn-bracket-1 { color: #c69cf4 !important; }
+[data-theme="dark"] .edn-bracket-2 { color: #7dd0db !important; }
+[data-theme="dark"] .edn-bracket-3 { color: #eda2c2 !important; }
+[data-theme="dark"] .edn-bracket-4 { color: #9dd693 !important; }
+[data-theme="dark"] .edn-bracket-5 { color: #87c7ff !important; }
 @media (min-width: 641px) and (max-width: 1400px) {
   .app-header { height: auto; min-height: 100px; flex-wrap: wrap; padding: 10px 16px; gap: 8px 12px; }
   .command-center-trigger { flex: 1; max-width: none; }
@@ -644,6 +672,7 @@ kbd { padding: 5px 7px; background: var(--subtle); border-radius: 4px; font: 11p
 .floating-menu::backdrop { background: transparent; }
 .floating-menu > div { display: grid; gap: 12px; min-width: 0; }
 .floating-menu input, .floating-menu select { width: 100%; min-width: 0; }
+.floating-menu input[type=checkbox] { width: 15px; height: 15px; flex: 0 0 15px; }
 @media (min-width: 721px) and (max-width: 1179px) {
   .workspace { --navigation-size: min(var(--sidebar-width, 200px), 15vw); --file-size: min(var(--files-width, 290px), 26vw); }
   .workspace.with-project-context { --navigation-size: min(var(--sidebar-width, 200px), 13vw); --file-size: min(var(--files-width, 290px), 22vw); --project-size: min(var(--context-width, 390px), 27vw); }

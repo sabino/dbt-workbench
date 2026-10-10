@@ -9,6 +9,7 @@ A generated query or working UI alone does not establish cross-engine correctnes
 | Connections | DuckDB, Snowflake JDBC, Snow CLI references | Define authentication, declared types, timeouts, and cancellation |
 | Federation | Bounded JDBC captures joined in DuckDB | Prove source consistency and type semantics before expanding limits |
 | Inspection | Static draft metadata, manifest resources, catalog schema, recorded runs and freshness | Expand parsing without claiming inferred types or executing templates |
+| Editor assistance | Local project completion, documentation, unique definitions, and structural EDN editing | Extend scope resolution with ambiguity tests; preserve drafts and explicit formatting |
 | Visual queries | Disabled | Preserve file text and undo before restoring builder controls |
 | Saved queries | Browser storage and JSON export | Define import validation and shared persistence before adding sync |
 | Version control | Local Git operations and explicit GitHub reads/drafts | Define review and authorization boundaries for remote writes |
@@ -16,6 +17,7 @@ A generated query or working UI alone does not establish cross-engine correctnes
 Keep native dbt authoritative for project compilation and materialization.
 Preserve decimal, timestamp, NULL, and duplicate semantics in source-oracle tests.
 Unsupported queries must retain their drafts with actionable diagnostics.
+Editor suggestions must keep declared metadata separate from inferred syntax and unknown types.
 
 Versioned data captures need schema, content hashes, source consistency, and artifact identity.
 Keep imported baseline artifacts distinct from captured rows.

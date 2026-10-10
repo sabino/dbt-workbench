@@ -2,6 +2,14 @@ import React from "react";
 
 const h = React.createElement;
 
+export function restoreDialogFocus(dialog, preferred, fallback = null) {
+  // A queued close event must respect focus the user already moved outside the dialog.
+  const active = document.activeElement;
+  if (active && active !== document.body && !dialog?.contains(active)) return;
+  const target = preferred?.isConnected ? preferred : fallback;
+  target?.focus();
+}
+
 export function SaveFileDialog(props) {
   const dialog = React.useRef(null);
   const input = React.useRef(null);
@@ -21,7 +29,7 @@ export function SaveFileDialog(props) {
   }, [props["open"]]);
   return h("dialog", {"ref": dialog, "className": "save-file-dialog", "aria-labelledby": "save-file-title",
     "onCancel": event => { if (callbacks.current["busy"]) event.preventDefault(); else callbacks.current["onClose"](); },
-    "onClose": () => { returnFocus.current?.isConnected && returnFocus.current.focus(); }},
+    "onClose": () => restoreDialogFocus(dialog.current, returnFocus.current)},
     h("form", {"onSubmit": event => { event.preventDefault(); if (!props["busy"] && path.trim()) props["onSave"](path); }},
       h("div", {"className": "save-file-heading"}, h("h2", {"id": "save-file-title"}, "Save file to project"), h("span", {"className": "hint"}, props["fileName"] || "Untitled file")),
       h("label", {"className": "field", "htmlFor": "new-file-path"}, h("span", {"className": "field-label"}, "Project-relative path"),
@@ -55,25 +63,36 @@ export function Popover(props) {
     element.style.left = `${position["left"]}px`;
     element.style.top = `${position["top"]}px`;
   }
-  function toggleMenu() {
-    if (menu.current.matches(":popover-open")) menu.current.hidePopover();
-    else { menu.current.showPopover(); positionMenu(); }
-  }
-  React.useEffect(function bindPopover() {
+  React.useLayoutEffect(function bindPopover() {
     const element = menu.current;
-    function updateOpen(event) { setOpen(event["newState"] === "open"); }
+    function prepareOpen(event) {
+      // Native toggle events arrive after opening. Keep the menu hidden until its viewport position is measured.
+      if (event["newState"] === "open") element.style.visibility = "hidden";
+    }
+    function updateOpen(event) {
+      const opened = event["newState"] === "open";
+      if (opened) positionMenu();
+      element.style.visibility = "";
+      setOpen(opened);
+    }
     function reposition() { if (element.matches(":popover-open")) positionMenu(); }
+    const observer = new ResizeObserver(reposition);
+    observer.observe(element);
+    observer.observe(trigger.current);
+    element.addEventListener("beforetoggle", prepareOpen);
     element.addEventListener("toggle", updateOpen);
     window.addEventListener("resize", reposition);
     document.addEventListener("scroll", reposition, true);
     return function unbindPopover() {
+      observer.disconnect();
+      element.removeEventListener("beforetoggle", prepareOpen);
       element.removeEventListener("toggle", updateOpen);
       window.removeEventListener("resize", reposition);
       document.removeEventListener("scroll", reposition, true);
     };
   }, []);
   return h(React.Fragment, null,
-    h("button", {"ref": trigger, "className": props["className"] || "icon-button", "aria-label": props["label"], "title": props["label"], "aria-haspopup": "dialog", "aria-expanded": open, "aria-controls": id, "onClick": toggleMenu}, props["trigger"] || props["label"]),
+    h("button", {"ref": trigger, "className": props["className"] || "icon-button", "aria-label": props["label"], "title": props["label"], "aria-haspopup": "dialog", "aria-expanded": open, "aria-controls": id, "popovertarget": id, "popovertargetaction": "toggle"}, props["trigger"] || props["label"]),
     h("div", {"ref": menu, "id": id, "popover": "auto", "role": "dialog", "aria-label": props["label"], "className": `floating-menu ${props["menuClass"] || ""}`}, props["children"]));
 }
 

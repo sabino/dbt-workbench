@@ -3,6 +3,7 @@ import {MagnifyingGlass} from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import {Command} from "@phosphor-icons/react/dist/csr/Command";
 import {Keyboard} from "@phosphor-icons/react/dist/csr/Keyboard";
 import {File} from "@phosphor-icons/react/dist/csr/File";
+import {restoreDialogFocus} from "./workspace-ui.js";
 
 const h = React["createElement"];
 export const COMMAND_EVENT_MARKER = "workbenchCommandHandled";
@@ -16,9 +17,16 @@ const DEFAULT_BINDINGS = {
   "preview-model": [], "build-project": [], "test-project": [], "parse-project": [],
   "show-overview": [], "show-documentation": [], "show-git": [], "show-connections": [], "show-routing": [],
   "show-activity": [], "show-changes": [], "show-runs": [], "switch-sql": [], "switch-edn": [],
-  "toggle-theme": [], "reset-layout": []
+  "toggle-theme": [], "reset-layout": [],
+  "trigger-completion": ["Ctrl+Space"], "editor-documentation": ["Ctrl+Shift+Space"], "goto-definition": ["F12"],
+  "edn-forward": ["Alt+ArrowRight"], "edn-backward": ["Alt+ArrowLeft"], "edn-up": ["Alt+ArrowUp"], "edn-down": ["Alt+ArrowDown"],
+  "edn-select-expand": ["Alt+Shift+ArrowUp"], "edn-select-contract": ["Alt+Shift+ArrowDown"],
+  "edn-slurp-forward": ["Ctrl+Alt+ArrowRight"], "edn-barf-forward": ["Ctrl+Alt+ArrowLeft"],
+  "edn-slurp-backward": ["Ctrl+Alt+Shift+ArrowRight"], "edn-barf-backward": ["Ctrl+Alt+Shift+ArrowLeft"],
+  "edn-wrap-vector": [], "edn-wrap-map": [], "edn-wrap-list": [], "edn-splice": []
 };
-const EDITOR_COMMANDS = new Set(["new-file", "save-file", "close-tab", "run-query", "run-all", "format-document"]);
+const INTELLIGENCE_COMMANDS = new Set(["trigger-completion", "editor-documentation", "goto-definition", "edn-forward", "edn-backward", "edn-up", "edn-down", "edn-select-expand", "edn-select-contract", "edn-slurp-forward", "edn-barf-forward", "edn-slurp-backward", "edn-barf-backward", "edn-wrap-vector", "edn-wrap-map", "edn-wrap-list", "edn-splice"]);
+const EDITOR_COMMANDS = new Set(["new-file", "save-file", "close-tab", "run-query", "run-all", "format-document", ...INTELLIGENCE_COMMANDS]);
 const MODIFIERS = ["Mod", "Ctrl", "Meta", "Alt", "Shift"];
 const RESERVED = new Set(["Mod+L", "Mod+R", "Mod+Shift+R", "Mod+T", "Mod+Shift+T", "Mod+Q", "Mod+H", "Mod+Tab", "Mod+Shift+Tab", "Mod+Alt+I", "Mod+Z", "Mod+Shift+Z", "Mod+Y", "Mod+C", "Mod+V", "Mod+X", "Mod+A", "Mod+F", "Mod+G", "Alt+F4", "F11", "F12"]);
 const INTERNAL_COMMANDS = [
@@ -79,7 +87,8 @@ export function validateShortcutAssignment(commandId, chord, overrides = {}) {
   if (!normalized) return {"valid": false, "chord": null, "reason": "Choose a key with Ctrl, Command, Alt or Shift, or a function key."};
   const parts = normalized.split("+");
   const key = parts.at(-1);
-  if (["Escape", "Tab"].includes(key) || parts.length === 1 && !/^F\d+$/.test(key) || /^[A-Z0-9]$/.test(key) && !parts.some(part => ["Mod", "Ctrl", "Meta", "Alt"].includes(part)) || RESERVED.has(conflictChord(normalized))) return {"valid": false, "chord": normalized, "reason": "This shortcut is reserved for browser navigation or normal typing."};
+  const reserved = RESERVED.has(conflictChord(normalized)) && !(commandId === "goto-definition" && normalized === "F12");
+  if (["Escape", "Tab"].includes(key) || parts.length === 1 && !/^F\d+$/.test(key) || /^[A-Z0-9]$/.test(key) && !parts.some(part => ["Mod", "Ctrl", "Meta", "Alt"].includes(part)) || reserved) return {"valid": false, "chord": normalized, "reason": "This shortcut is reserved for browser navigation or normal typing."};
   const conflict = Object.entries(resolveShortcutKeymap(overrides)).find(([id, chords]) => id !== commandId && chords.some(value => conflictChord(value) === conflictChord(normalized)));
   return conflict ? {"valid": false, "chord": normalized, "reason": `Already assigned to ${conflict[0]}.`, "conflict": conflict[0]} : {"valid": true, "chord": normalized, "reason": null};
 }
@@ -121,6 +130,7 @@ export function resolveCommandForEvent(event, commands, overrides = {}, context 
   const id = found["id"];
   const palette = ["search-files", "search-commands", "search-mixed"].includes(id);
   if (!palette && (context["dialogOpen"] || context["typingOutsideEditor"])) return null;
+  if (INTELLIGENCE_COMMANDS.has(id) && !context["editorFocused"]) return null;
   if (palette || id === "keyboard-shortcuts") return id;
   const command = commands.find(item => item["id"] === id);
   return command && command["enabled"] !== false && typeof command["run"] === "function" ? id : null;
@@ -264,7 +274,7 @@ export function CommandCenter(props) {
     function handleKey(event) {
       if (event[COMMAND_EVENT_MARKER] || event["defaultPrevented"] || event["isComposing"] || event["repeat"]) return;
       const id = resolveCommandForEvent(event, latest["current"]["commands"] || [], keymapRef["current"],
-        {"dialogOpen": Boolean(dialog["current"]?.["open"] || event["target"]?.["closest"]?.("dialog[open]")), "typingOutsideEditor": isTypingOutsideEditor(event["target"]), "capturing": dialog["current"]?.["open"] && actions["current"]["capturing"]});
+        {"dialogOpen": Boolean(dialog["current"]?.["open"] || event["target"]?.["closest"]?.("dialog[open]")), "typingOutsideEditor": isTypingOutsideEditor(event["target"]), "editorFocused": Boolean(event["target"]?.["closest"]?.(".cm-editor")), "capturing": dialog["current"]?.["open"] && actions["current"]["capturing"]});
       if (!id) return;
       if (!dialog["current"]?.["open"]) returnFocus["current"] = document["activeElement"];
       event[COMMAND_EVENT_MARKER] = true; event["preventDefault"](); event["stopPropagation"]();
@@ -290,7 +300,7 @@ export function CommandCenter(props) {
     h("button", {"ref": trigger, "className": "command-center-trigger", "onClick": () => openPalette("mixed"), "aria-label": "Search files and commands", "aria-haspopup": "dialog"}, h(MagnifyingGlass, {"size": 16, "aria-hidden": true}), h("span", null, "Search files and commands"), h("kbd", null, keymap["search-mixed"][0] || "Search")),
     error ? h("span", {"className": "command-center-error", "role": "alert"}, error) : null,
     h("dialog", {"ref": dialog, "className": "command-center-dialog", "aria-labelledby": "command-center-title", "onKeyDown": onDialogKey,
-      "onClose": () => { if (shouldRestore["current"]) (returnFocus["current"]?.["isConnected"] ? returnFocus["current"] : trigger["current"])?.["focus"](); },
+      "onClose": () => { if (shouldRestore["current"]) restoreDialogFocus(dialog["current"], returnFocus["current"], trigger["current"]); },
       "onClick": event => { if (event["target"] === dialog["current"]) { const box = dialog["current"]["getBoundingClientRect"](); if (event["clientX"] < box["left"] || event["clientX"] > box["right"] || event["clientY"] < box["top"] || event["clientY"] > box["bottom"]) dialog["current"]["close"](); } }},
       h("div", {"className": "command-center-heading"}, h(mode === "settings" ? Keyboard : commandMode ? Command : File, {"size": 18, "aria-hidden": true}), h("h2", {"id": "command-center-title"}, mode === "settings" ? "Keyboard shortcuts" : commandMode ? "Commands" : mode === "mixed" ? "Files and commands" : "Go to file"), h("button", {"className": "command-center-close", "aria-label": "Close command center", "onClick": () => dialog["current"]["close"]()}, "Esc")),
       mode === "settings" ? h("div", {"className": "shortcut-settings"}, h("p", {"className": "shortcut-help"}, "Assign a replacement shortcut. Mod means Command on macOS or Ctrl on other keyboards. Changes stay in this browser."),

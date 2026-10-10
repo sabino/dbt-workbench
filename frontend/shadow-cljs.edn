@@ -6,6 +6,7 @@
                 :output-dir "../resources/static/js"
                 :asset-path "/static/js"
                 :modules {:main {:init-fn workbench.core/init}}
-                :js-options {:export-conditions ["browser" "import" "default" "require"]}
-                :compiler-options {:infer-externs :auto}
+                :js-options {:export-conditions ["browser" "import" "default" "require"]
+                             :resolve {"assert" {:target :file :file "src/workbench/browser-assert.cjs"}}}
+                :compiler-options {:infer-externs :auto :externs ["externs/editor.js"]}
                 :devtools {:after-load workbench.core/refresh}}}}
