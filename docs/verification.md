@@ -61,6 +61,7 @@ Changing editor settings preserves text and history. Options and source text per
 Documentation remains within the viewport at 390 and 1536 pixels. Editor popovers dismiss on a second trigger click.
 
 Keyboard checks cover file and command search, modal buttons, Tab navigation, shortcut assignment, and persistence after reload.
+Closing the command center preserves focus moved to the editor before its queued close event.
 Visual mode remains disabled. Markdown and JSON files open alongside SQL files in the central editor.
 CSV, Python, and extensionless files retain text across mode switches. Binary files open in read-only tabs with metadata.
 A local federated join across development and baseline connections returned the expected 100 matching customers.

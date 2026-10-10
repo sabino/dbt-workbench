@@ -3,6 +3,7 @@ import {MagnifyingGlass} from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import {Command} from "@phosphor-icons/react/dist/csr/Command";
 import {Keyboard} from "@phosphor-icons/react/dist/csr/Keyboard";
 import {File} from "@phosphor-icons/react/dist/csr/File";
+import {restoreDialogFocus} from "./workspace-ui.js";
 
 const h = React["createElement"];
 export const COMMAND_EVENT_MARKER = "workbenchCommandHandled";
@@ -299,7 +300,7 @@ export function CommandCenter(props) {
     h("button", {"ref": trigger, "className": "command-center-trigger", "onClick": () => openPalette("mixed"), "aria-label": "Search files and commands", "aria-haspopup": "dialog"}, h(MagnifyingGlass, {"size": 16, "aria-hidden": true}), h("span", null, "Search files and commands"), h("kbd", null, keymap["search-mixed"][0] || "Search")),
     error ? h("span", {"className": "command-center-error", "role": "alert"}, error) : null,
     h("dialog", {"ref": dialog, "className": "command-center-dialog", "aria-labelledby": "command-center-title", "onKeyDown": onDialogKey,
-      "onClose": () => { if (shouldRestore["current"]) (returnFocus["current"]?.["isConnected"] ? returnFocus["current"] : trigger["current"])?.["focus"](); },
+      "onClose": () => { if (shouldRestore["current"]) restoreDialogFocus(dialog["current"], returnFocus["current"], trigger["current"]); },
       "onClick": event => { if (event["target"] === dialog["current"]) { const box = dialog["current"]["getBoundingClientRect"](); if (event["clientX"] < box["left"] || event["clientX"] > box["right"] || event["clientY"] < box["top"] || event["clientY"] > box["bottom"]) dialog["current"]["close"](); } }},
       h("div", {"className": "command-center-heading"}, h(mode === "settings" ? Keyboard : commandMode ? Command : File, {"size": 18, "aria-hidden": true}), h("h2", {"id": "command-center-title"}, mode === "settings" ? "Keyboard shortcuts" : commandMode ? "Commands" : mode === "mixed" ? "Files and commands" : "Go to file"), h("button", {"className": "command-center-close", "aria-label": "Close command center", "onClick": () => dialog["current"]["close"]()}, "Esc")),
       mode === "settings" ? h("div", {"className": "shortcut-settings"}, h("p", {"className": "shortcut-help"}, "Assign a replacement shortcut. Mod means Command on macOS or Ctrl on other keyboards. Changes stay in this browser."),

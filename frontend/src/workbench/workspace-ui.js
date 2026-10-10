@@ -2,6 +2,14 @@ import React from "react";
 
 const h = React.createElement;
 
+export function restoreDialogFocus(dialog, preferred, fallback = null) {
+  // A queued close event must respect focus the user already moved outside the dialog.
+  const active = document.activeElement;
+  if (active && active !== document.body && !dialog?.contains(active)) return;
+  const target = preferred?.isConnected ? preferred : fallback;
+  target?.focus();
+}
+
 export function SaveFileDialog(props) {
   const dialog = React.useRef(null);
   const input = React.useRef(null);
@@ -21,7 +29,7 @@ export function SaveFileDialog(props) {
   }, [props["open"]]);
   return h("dialog", {"ref": dialog, "className": "save-file-dialog", "aria-labelledby": "save-file-title",
     "onCancel": event => { if (callbacks.current["busy"]) event.preventDefault(); else callbacks.current["onClose"](); },
-    "onClose": () => { returnFocus.current?.isConnected && returnFocus.current.focus(); }},
+    "onClose": () => restoreDialogFocus(dialog.current, returnFocus.current)},
     h("form", {"onSubmit": event => { event.preventDefault(); if (!props["busy"] && path.trim()) props["onSave"](path); }},
       h("div", {"className": "save-file-heading"}, h("h2", {"id": "save-file-title"}, "Save file to project"), h("span", {"className": "hint"}, props["fileName"] || "Untitled file")),
       h("label", {"className": "field", "htmlFor": "new-file-path"}, h("span", {"className": "field-label"}, "Project-relative path"),
