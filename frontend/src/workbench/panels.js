@@ -89,35 +89,3 @@ export function ProjectBranch(props) {
   const branch = state?.["available"] ? state["branch"] || "Detached HEAD" : "Local project";
   return h("button", {"className": "header-branch", "aria-label": "Open source control", "title": branch, "onClick": () => props["onInspect"]("git")}, h(GitBranch, {"size": 16}), h("span", null, resource["loading"] ? "Git…" : branch));
 }
-
-export function CommandPalette(props) {
-  const dialog = React.useRef(null);
-  const input = React.useRef(null);
-  const [search, setSearch] = React.useState("");
-  const [index, setIndex] = React.useState(0);
-  const files = useResource(`/api/projects/${props["project"]["id"]}/files`);
-  const commands = [["metadata", "Inspect file metadata"], ["lineage", "Open lineage"], ["documentation", "Search documentation"], ["git", "Open version control"], ["connections", "Manage connections"], ["routing", "Configure environment routing"], ["runs", "Inspect runs and tests"], ["activity", "Show activity"]];
-  const items = [...commands.map(([view, label]) => ({"id": view, "label": label, "view": view})), ...(files["data"]?.["files"] || []).map(file => ({"id": file["path"], "label": file["path"], "path": file["path"]}))].filter(item => item["label"].toLowerCase().includes(search.toLowerCase())).slice(0, 40);
-  function showPalette() { setSearch(""); setIndex(0); dialog.current.showModal(); input.current.focus(); }
-  function selectItem(item) {
-    if (!item) return;
-    dialog.current.close();
-    if (item["path"]) props["onOpenFile"](item["path"]);
-    else props["onInspect"](item["view"]);
-  }
-  React.useEffect(function bindPalette() {
-    function handleShortcut(event) { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); showPalette(); } }
-    document.addEventListener("keydown", handleShortcut);
-    return function unbindPalette() { document.removeEventListener("keydown", handleShortcut); };
-  }, []);
-  return h(React.Fragment, null,
-    h("button", {"className": "command-search", "onClick": showPalette, "aria-label": "Search files and commands"}, h("span", null, "Search files or run a command…"), h("kbd", null, "⌘ K")),
-    h("dialog", {"ref": dialog, "className": "command-dialog", "aria-label": "Command palette", "onClick": event => { if (event.target === dialog.current) dialog.current.close(); }},
-      h("input", {"ref": input, "aria-label": "Search commands", "placeholder": "Search files and commands…", "value": search, "onChange": event => { setSearch(event.target.value); setIndex(0); }, "onKeyDown": event => {
-        if (event.key === "ArrowDown") { event.preventDefault(); setIndex(Math.min(items.length - 1, index + 1)); }
-        if (event.key === "ArrowUp") { event.preventDefault(); setIndex(Math.max(0, index - 1)); }
-        if (event.key === "Enter") { event.preventDefault(); selectItem(items[index]); }
-      }}),
-      h("div", {"className": "command-list"}, items.length ? items.map((item, itemIndex) => h("button", {"className": `command-item ${itemIndex === index ? "selected" : ""}`, "key": item["id"], "onClick": () => selectItem(item)}, item["label"])) : h("p", {"className": "panel-empty"}, "No files or commands match.")),
-      h("p", {"className": "hint"}, "↑ ↓ to choose · Enter to open · Esc to close")));
-}

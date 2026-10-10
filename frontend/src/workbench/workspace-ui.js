@@ -2,6 +2,37 @@ import React from "react";
 
 const h = React.createElement;
 
+export function SaveFileDialog(props) {
+  const dialog = React.useRef(null);
+  const input = React.useRef(null);
+  const returnFocus = React.useRef(null);
+  const callbacks = React.useRef(props);
+  callbacks.current = props;
+  const [path, setPath] = React.useState(props["initialPath"] || "");
+  React.useEffect(function toggleSaveDialog() {
+    const element = dialog.current;
+    if (props["open"] && !element.open) {
+      returnFocus.current = document.activeElement;
+      setPath(props["initialPath"] || "");
+      element.showModal();
+      input.current.focus();
+      input.current.select();
+    } else if (!props["open"] && element.open) element.close();
+  }, [props["open"]]);
+  return h("dialog", {"ref": dialog, "className": "save-file-dialog", "aria-labelledby": "save-file-title",
+    "onCancel": event => { if (callbacks.current["busy"]) event.preventDefault(); else callbacks.current["onClose"](); },
+    "onClose": () => { returnFocus.current?.isConnected && returnFocus.current.focus(); }},
+    h("form", {"onSubmit": event => { event.preventDefault(); if (!props["busy"] && path.trim()) props["onSave"](path); }},
+      h("div", {"className": "save-file-heading"}, h("h2", {"id": "save-file-title"}, "Save file to project"), h("span", {"className": "hint"}, props["fileName"] || "Untitled file")),
+      h("label", {"className": "field", "htmlFor": "new-file-path"}, h("span", {"className": "field-label"}, "Project-relative path"),
+        h("input", {"id": "new-file-path", "ref": input, "aria-label": "New file path", "value": path, "disabled": props["busy"], "autoComplete": "off", "spellCheck": false,
+          "onChange": event => setPath(event.target.value)})),
+      h("p", {"className": "hint"}, "Choose a path such as models/customer_metrics.sql. Existing files are preserved."),
+      props["error"] ? h("p", {"className": "save-file-error"}, props["error"]) : null,
+      h("div", {"className": "save-file-buttons"}, h("button", {"type": "button", "className": "button small", "disabled": props["busy"], "onClick": props["onClose"]}, "Cancel"),
+        h("button", {"type": "submit", "className": "button primary small", "disabled": props["busy"] || !path.trim()}, props["busy"] ? "Saving…" : "Create file"))));
+}
+
 export function clampSize(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }

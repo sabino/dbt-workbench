@@ -41,10 +41,13 @@
                  [:private_key_file_env {:optional true} [:string {:min 1 :max 128}]] [:private_key_file_pwd_env {:optional true} [:string {:min 1 :max 128}]]]]
    :routing [:map {:closed true} [:version [:= 1]] [:routes [:vector {:max 10000} [:map {:closed true} [:model_id :string] [:target :string] [:schema {:optional true} :string] [:relation {:optional true} :string]]]]]
    :open [:map {:closed true} [:path [:string {:min 1 :max 4096}]] [:profiles_dir {:optional true} [:maybe :string]]]
-   :save [:map {:closed true} [:path [:string {:min 1 :max 4096}]] [:content [:string {:max 2000000}]] [:expected_revision [:maybe :string]]]
+   :create-file [:map {:closed true} [:path [:string {:min 1 :max 4096}]] [:content [:string {:max 2097152}]]]
+   :save [:map {:closed true} [:path [:string {:min 1 :max 4096}]] [:content [:string {:max 2097152}]] [:expected_revision [:maybe :string]]]
    :import [:map {:closed true} [:artifact_dir [:string {:min 1 :max 4096}]] [:target [:string {:min 1 :max 128}]]]
    :job [:map {:closed true} [:kind [:enum "parse" "build" "test" "baseline" "preview" "query" "compare"]] [:options {:optional true} options-schema]]
+   :format [:map {:closed true} [:content [:string {:min 1 :max 2000000}]] [:format [:= "edn"]]]
    :convert [:map {:closed true} [:content [:string {:min 1 :max 2000000}]] [:format [:enum "sql" "edn"]]
+             [:save_format {:optional true} [:enum "sql" "edn"]]
              [:parameters {:optional true} [:map-of :keyword :any]] [:target {:optional true} :string] [:dialect {:optional true} [:enum "duckdb" "sqlite" "snowflake" "federated"]]]})
 (defn validate! [kind value]
   (when-not (malli/validate (schemas kind) value) (storage/fail! (str "Invalid " (name kind) " request fields.") 422))

@@ -2,7 +2,7 @@ import React from "react";
 import {clojure} from "@nextjournal/lang-clojure";
 import {EditorState, Compartment} from "@codemirror/state";
 import {EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, Decoration, ViewPlugin} from "@codemirror/view";
-import {defaultKeymap, history, historyKeymap, indentWithTab} from "@codemirror/commands";
+import {defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory} from "@codemirror/commands";
 import {autocompletion, closeBrackets, closeBracketsKeymap} from "@codemirror/autocomplete";
 import {sql, PostgreSQL} from "@codemirror/lang-sql";
 import {HighlightStyle, syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput} from "@codemirror/language";
@@ -92,6 +92,7 @@ export function formatSql(text, options = {}) {
 }
 
 export function focusQueryEditor() {
+  if (document.querySelector("dialog[open]")) return;
   document.querySelector(".main-pane .file-editor-pane:not([hidden]) .cm-content")?.focus();
 }
 
@@ -123,11 +124,17 @@ export function QueryEditor(props) {
   callbacks.current = props;
   const language = React.useRef(new Compartment());
   const readOnly = React.useRef(new Compartment());
+  const attributes = React.useRef(new Compartment());
+  const representations = React.useRef(new Map());
+  const activeMode = React.useRef(props["format"]);
   const schema = JSON.stringify(props["schema"] || {});
-  function runEditor(editor, all) {
-    const selection = editor["state"]["selection"]["main"];
-    callbacks.current["onRun"](all, editor["state"]["doc"].toString(),
-      {"from": selection["from"], "to": selection["to"], "head": selection["head"]});
+  function readSelection() {
+    const selection = props["selection"] || {"from": 0, "to": 0, "head": 0};
+    return {"anchor": Math.min(selection["head"] === selection["from"] ? selection["to"] : selection["from"], props["value"].length),
+      "head": Math.min(selection["head"], props["value"].length)};
+  }
+  function readOnlyExtensions() {
+    return [EditorState.readOnly.of(Boolean(props["readOnly"])), EditorView.editable.of(!props["readOnly"])];
   }
   function highlightStatement(editor) {
     if (callbacks.current["file"] || callbacks.current["format"] !== "sql") return Decoration.none;
@@ -142,10 +149,8 @@ export function QueryEditor(props) {
     return Decoration.set(Array.from({length: lastLine - firstLine + 1}, (_, index) =>
       Decoration.line({class: "active-statement"}).range(document["line"](firstLine + index)["from"])));
   }
-  React.useEffect(function mountEditor() {
-    const editor = new EditorView({
-      parent: host.current,
-      state: EditorState.create({doc: props["value"], selection: {anchor: props["selection"]?.["from"] || 0, head: props["selection"]?.["head"] || 0}, extensions: [
+  function createEditorState() {
+    return EditorState.create({doc: props["value"], selection: readSelection(), extensions: [
         EditorView.lineWrapping, lineNumbers(), highlightActiveLine(), highlightActiveLineGutter(), drawSelection(),
         history(), bracketMatching(), closeBrackets(), autocompletion({icons: false}), indentOnInput(), syntaxHighlighting(queryHighlightStyle),
         ViewPlugin.define(function decorateStatement(editor) {
@@ -154,16 +159,9 @@ export function QueryEditor(props) {
           }};
         }, {decorations: function getDecorations(plugin) { return plugin.decorations; }}),
         language.current.of(createLanguage(props)),
-        readOnly.current.of([EditorState.readOnly.of(Boolean(props["readOnly"])), EditorView.editable.of(!props["readOnly"])]),
-        EditorView.contentAttributes.of({"aria-label": props["label"] || "Query editor", "spellcheck": "false"}),
-        keymap.of([
-          {key: "Mod-s", run: function saveFile() { if (!callbacks.current["onSave"]) return false; callbacks.current["onSave"](); return true; }},
-          {key: "Shift-Enter", run: function runStatement(editor) { runEditor(editor, false); return true; }},
-          {key: "F5", run: function runF5(editor) { runEditor(editor, false); return true; }},
-          {key: "Mod-Enter", run: function runModEnter(editor) { runEditor(editor, false); return true; }},
-          {key: "Mod-Shift-Enter", run: function runAll(editor) { runEditor(editor, true); return true; }},
-          ...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab
-        ]),
+        readOnly.current.of(readOnlyExtensions()),
+        attributes.current.of(EditorView.contentAttributes.of({"aria-label": props["label"] || "Query editor", "spellcheck": "false"})),
+        keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
         EditorView.updateListener.of(function updateEditor(update) {
           if (update["docChanged"]) callbacks.current["onChange"](update["state"]["doc"].toString());
           if (update["selectionSet"] || update["docChanged"]) {
@@ -171,24 +169,36 @@ export function QueryEditor(props) {
             callbacks.current["onSelection"]({"from": selection["from"], "to": selection["to"], "head": selection["head"]});
           }
         })
-      ]})
-    });
+      ]});
+  }
+  React.useLayoutEffect(function mountEditor() {
+    const editor = new EditorView({parent: host.current, state: createEditorState()});
     view.current = editor;
     return function destroyEditor() { editor["destroy"](); view.current = null; };
   }, []);
-  React.useEffect(function updateDocument() {
-    if (view.current && view.current["state"]["doc"].toString() !== props["value"]) {
-      const selection = props["selection"] || {from: 0, to: 0, head: 0};
-      view.current["dispatch"]({changes: {from: 0, to: view.current["state"]["doc"].length, insert: props["value"]},
-        selection: {anchor: Math.min(selection["head"] === selection["from"] ? selection["to"] : selection["from"], props["value"].length),
-                    head: Math.min(selection["head"], props["value"].length)}});
+  React.useLayoutEffect(function updateRepresentation() {
+    const editor = view.current;
+    if (!editor) return;
+    const modeChanged = activeMode.current !== props["format"];
+    const effects = [language.current["reconfigure"](createLanguage(props)),
+      readOnly.current["reconfigure"](readOnlyExtensions()),
+      attributes.current["reconfigure"](EditorView.contentAttributes.of({"aria-label": props["label"] || "Query editor", "spellcheck": "false"}))];
+    if (modeChanged) {
+      // Each representation owns its undo history; viewing EDN never inserts EDN into SQL history.
+      representations.current.set(activeMode.current, {"state": editor["state"], "scrollTop": editor["scrollDOM"]["scrollTop"]});
+      const cached = representations.current.get(props["format"]);
+      let state = cached?.["state"] || createEditorState();
+      if (state["doc"].toString() !== props["value"]) {
+        state = state["update"]({"changes": {"from": 0, "to": state["doc"].length, "insert": props["value"]}, "selection": readSelection(), "annotations": isolateHistory.of("full")})["state"];
+      }
+      editor["setState"](state["update"]({"effects": effects})["state"]);
+      editor["scrollDOM"]["scrollTop"] = cached?.["scrollTop"] || 0;
+      activeMode.current = props["format"];
+    } else {
+      const changes = editor["state"]["doc"].toString() !== props["value"]
+        ? {"changes": {"from": 0, "to": editor["state"]["doc"].length, "insert": props["value"]}, "selection": readSelection()} : {};
+      editor["dispatch"]({...changes, "effects": effects});
     }
-  }, [props["value"]]);
-  React.useEffect(function updateLanguage() {
-    view.current?.["dispatch"]({effects: language.current["reconfigure"](createLanguage(props))});
-  }, [props["format"], schema]);
-  React.useEffect(function updateReadOnly() {
-    view.current?.["dispatch"]({effects: readOnly.current["reconfigure"]([EditorState.readOnly.of(Boolean(props["readOnly"])), EditorView.editable.of(!props["readOnly"])])});
-  }, [props["readOnly"]]);
+  }, [props["value"], props["format"], props["readOnly"], props["label"], schema]);
   return React.createElement("div", {ref: host, className: "query-code-editor"});
 }

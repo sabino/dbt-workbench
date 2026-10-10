@@ -1,7 +1,6 @@
 (ns workbench.core
   (:require [clojure.string :as str]
             [cljs.reader :as reader]
-            [cljs.pprint :as pprint]
             ["react" :as react]
             ["@phosphor-icons/react/dist/csr/Play" :as play-icon]
             ["@phosphor-icons/react/dist/csr/FileText" :as file-icon]
@@ -32,19 +31,24 @@
             ["./panels.js" :as panels]
             ["./query-library.js" :as query-library]
             ["./workspace-ui.js" :as workspace-ui]
+            ["./document-modes.js" :as document-modes]
+            ["./command-center.js" :as command-center]
             [com.fulcrologic.fulcro.application :as app]
             [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
             [com.fulcrologic.fulcro.dom :as dom]
             [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]))
 
 (declare application load-project! load-file! select-model! select-job! load-result!
-         submit! refresh-project! save-file! create-demo! open-project! cancel-job! import-baseline! load-query! load-changes! run-query! json-display close-file! update-file-content! load-catalog! format-query! save-format-options!)
+         submit! refresh-project! save-file! create-demo! open-project! cancel-job! import-baseline! load-query! load-changes! run-query! json-display close-file! update-file-content! load-catalog! format-query! save-format-options! query-parameters new-file! save-new-file! run-preview! build-project!)
 
 (def default-sql "SELECT customer_id, SUM(amount) AS revenue\nFROM orders\nGROUP BY customer_id\nORDER BY customer_id")
 (defonce file-load-counter (atom 0))
+(defonce conversion-counter (atom 0))
+(defonce untitled-counter (atom 0))
 (def initial
   {:ui/inspector nil :ui/bottom-tab "results" :ui/sidebar-collapsed false :ui/sidebar-width 200 :ui/context-width 390 :ui/files-width 290 :ui/file-view "models" :ui/files-search "" :ui/explorer-visible true
-   :ui/open-files [] :ui/status-job nil :ui/results-view "data" :ui/compare-result nil :ui/theme "system" :ui/projects [] :ui/project nil :ui/models [] :ui/jobs [] :ui/files []
+   :ui/open-files [] :ui/converting nil :ui/save-dialog nil :ui/always-format false :ui/scratch-visible true :ui/query-conversion nil :ui/query-parameters "{}" :ui/query-saved-content default-sql :ui/query-saved-format "sql"
+   :ui/status-job nil :ui/results-view "data" :ui/compare-result nil :ui/theme "system" :ui/projects [] :ui/project nil :ui/models [] :ui/jobs [] :ui/files []
    :ui/results [] :ui/target "dev" :ui/defer true :ui/favor-state false
    :ui/tab "query" :ui/model-id nil :ui/file nil :ui/loading-file nil :ui/content "" :ui/saved-content ""
    :ui/selected-job nil :ui/events [] :ui/event-cursor 0 :ui/result nil :ui/page nil
@@ -76,19 +80,29 @@
 (defn value! [key event] (patch! {key (.. event -target -value)}))
 (defn checked! [key event] (patch! {key (.. event -target -checked)}))
 (defn project-id [] (get-in (current) [:ui/project :id]))
-(defn resolve-file-format [file]
-  (or (:editor-mode file)
-      (cond (str/ends-with? (:path file) ".sql") "sql"
-            (str/ends-with? (:path file) ".edn") "edn"
-            :else "text")))
+(defn native-file-format [file]
+  (cond (:untitled file) (:native-mode file "sql")
+        (str/ends-with? (:path file) ".sql") "sql"
+        (str/ends-with? (:path file) ".edn") "edn"
+        :else "text"))
+(defn resolve-file-format [file] (or (:editor-mode file) (native-file-format file)))
+(defn file-document [file]
+  {:mode (resolve-file-format file) :content (:draft file (:content file)) :parameters (:parameters file "{}")
+   :selection (:selection file {:from 0 :to 0 :head 0}) :conversion (:conversion file)
+   :nativeMode (native-file-format file) :savedContent (:content file) :untitled (boolean (:untitled file))})
+(defn file-dirty? [file] (and file (document-modes/isDocumentDirty (clj->js (file-document file)))))
 (defn read-editor-document [s]
   (if-let [file (:ui/file s)]
     (let [opened (first (filter #(= (:path file) (:path %)) (:ui/open-files s)))]
-      {:content (:ui/content s) :format (resolve-file-format file) :selection (:selection opened {:from 0 :to 0 :head 0}) :path (:path file)})
-    {:content (:ui/query-content s) :format (:ui/query-format s) :selection (:ui/query-selection s)}))
+      (assoc (file-document opened) :format (resolve-file-format opened) :path (:path file) :key (:path file)))
+    {:content (:ui/query-content s) :mode (:ui/query-format s) :format (:ui/query-format s)
+     :selection (:ui/query-selection s) :parameters (:ui/query-parameters s) :conversion (:ui/query-conversion s) :key "scratch-query"
+     :nativeMode (:ui/query-saved-format s) :savedContent (:ui/query-saved-content s)}))
+(defn query-dirty? [s]
+  (document-modes/isDocumentDirty (clj->js (read-editor-document (assoc s :ui/file nil)))))
 (defn dirty? []
-  (or (not= (:ui/content (current)) (:ui/saved-content (current)))
-      (some #(not= (:draft %) (:content %)) (:ui/open-files (current)))))
+  (or (query-dirty? (current))
+      (some file-dirty? (:ui/open-files (current)))))
 (defn may-discard? [] (or (not (dirty?)) (js/confirm "Discard the unsaved changes in this editor?")))
 (defn api-path [suffix] (str "/api/projects/" (project-id) suffix))
 (defn human-error [x]
@@ -151,7 +165,10 @@
   (when (may-discard?)
     (swap! file-load-counter inc)
     (save-preference! "workbench.project" nil)
-    (patch! {:ui/project nil :ui/file nil :ui/loading-file nil :ui/open-files [] :ui/model-id nil :ui/inspector nil :ui/error nil :ui/notice nil :ui/content "" :ui/saved-content ""})))
+    (patch! {:ui/project nil :ui/file nil :ui/loading-file nil :ui/open-files [] :ui/model-id nil :ui/inspector nil :ui/error nil :ui/notice nil :ui/content "" :ui/saved-content ""
+             :ui/converting nil :ui/save-dialog nil :ui/submitting false :ui/query-content default-sql :ui/query-saved-content default-sql :ui/query-saved-format "sql"
+             :ui/query-format "sql" :ui/query-conversion nil :ui/query-parameters "{}" :ui/parameters "{}" :ui/scratch-visible true
+             :ui/query-selection {:from 0 :to 0 :head 0} :ui/editor-revision (inc (:ui/editor-revision (current)))})))
 (defn load-projects! []
   (-> (request! "GET" "/api/projects")
     (.then #(patch! {:ui/projects (:projects %)})) (.catch report-error!)))
@@ -184,7 +201,10 @@
   (when (may-discard?)
     (swap! file-load-counter inc)
     (patch! {:ui/error nil :ui/notice nil :ui/file nil :ui/loading-file nil :ui/content "" :ui/saved-content ""
-           :ui/open-files [] :ui/inspector nil :ui/bottom-tab "results" :ui/status-job nil :ui/compare-result nil :ui/models [] :ui/jobs [] :ui/events [] :ui/event-cursor 0 :ui/selected-job nil :ui/query-job nil :ui/query-requesting false
+           :ui/open-files [] :ui/converting nil :ui/save-dialog nil :ui/submitting false :ui/scratch-visible true
+           :ui/query-content default-sql :ui/query-saved-content default-sql :ui/query-saved-format "sql" :ui/query-format "sql" :ui/query-conversion nil :ui/query-parameters "{}" :ui/parameters "{}"
+           :ui/query-selection {:from 0 :to 0 :head 0} :ui/editor-revision (inc (:ui/editor-revision (current)))
+           :ui/inspector nil :ui/bottom-tab "results" :ui/status-job nil :ui/compare-result nil :ui/models [] :ui/jobs [] :ui/events [] :ui/event-cursor 0 :ui/selected-job nil :ui/query-job nil :ui/query-requesting false
            :ui/result nil :ui/page nil :ui/results [] :ui/model-id nil :ui/conflict false :ui/changes [] })
   (-> (request! "GET" (str "/api/projects/" id))
     (.then (fn [project]
@@ -211,34 +231,109 @@
     (when-not (:read_only file)
       (patch! (cond-> {:ui/open-files (mapv #(if (= path (:path %)) (assoc % :draft content) %) files)}
                 (= path (get-in (current) [:ui/file :path])) (assoc :ui/content content))))))
-(defn update-document-content! [content]
-  (if-let [path (get-in (current) [:ui/file :path])]
-    (update-file-content! path content)
-    (patch! {:ui/query-content content})))
+(defn update-document-parameters! [event]
+  (let [parameters (.. event -target -value) path (get-in (current) [:ui/file :path])]
+    (patch! (if path
+              {:ui/parameters parameters :ui/open-files (mapv #(if (= path (:path %)) (assoc % :parameters parameters) %) (:ui/open-files (current)))}
+              {:ui/parameters parameters :ui/query-parameters parameters}))))
+(defn read-document-by-key [key]
+  (let [s (current)]
+    (if (= key "scratch-query") (read-editor-document (assoc s :ui/file nil))
+      (when-let [file (first (filter #(= key (:path %)) (:ui/open-files s)))] (assoc (file-document file) :key key)))))
+(defn update-document-view! [key view]
+  (let [s (current) active? (= key (:key (read-editor-document s)))
+        updates (if (= key "scratch-query")
+                  {:ui/query-content (:content view) :ui/query-format (:mode view) :ui/query-conversion (:conversion view)
+                   :ui/query-selection (:selection view) :ui/query-parameters (:parameters view)}
+                  {:ui/open-files (mapv #(if (= key (:path %))
+                                         (assoc % :draft (:content view) :editor-mode (:mode view) :conversion (:conversion view)
+                                                  :selection (:selection view) :parameters (:parameters view)) %) (:ui/open-files s))})]
+    (patch! (cond-> updates
+              active? (assoc :ui/parameters (:parameters view))
+              (and active? (not= key "scratch-query"))
+              (assoc :ui/content (:content view) :ui/file (assoc (:ui/file s) :editor-mode (:mode view)))))))
+(defn format-document-content! [content mode options]
+  (if (or (str/blank? content) (= "text" mode)) (js/Promise.resolve content)
+    (case mode
+      "sql" (js/Promise.resolve (editor/formatSql content (clj->js options)))
+      "edn" (-> (request! "POST" (api-path "/query/format") {:content content :format "edn"})
+                (.then (fn [response] (:content response)))))))
+(defn convert-document! [document mode & [save-format]]
+  (let [s (current) save-format (or save-format (when (and (= "edn" (:mode document)) (= "sql" mode)) "sql"))]
+    (when (and (:path document) (re-find #"\{[\{%]" (:content document)))
+      (throw (js/Error. "Compile dbt templates with Preview model first. SQL-to-EDN conversion requires executable SQL.")))
+    (-> (request! "POST" (api-path "/query/convert")
+          (cond-> {:content (:content document) :format (:mode document) :parameters (js->clj (js/JSON.parse (:parameters document)) :keywordize-keys true)
+                   :target (:ui/target s) :dialect (:ui/dialect s)} save-format (assoc :save_format save-format)))
+        (.then (fn [response]
+                 (let [view {:mode mode :content (:content response)
+                             :parameters (if (contains? response :parameters) (json-display (:parameters response)) (:parameters document))
+                             :selection {:from 0 :to 0 :head 0}}]
+                   (assoc view :conversion (js->clj (document-modes/recordConversion (clj->js document) (clj->js view)) :keywordize-keys true))))))))
 (defn select-editor-mode! [mode]
-  (when (and (#{"sql" "edn" "text"} mode) (not (get-in (current) [:ui/file :read_only])))
-    (if-let [file (:ui/file (current))]
-      (patch! {:ui/file (assoc file :editor-mode mode)
-               :ui/open-files (mapv #(if (= (:path file) (:path %)) (assoc % :editor-mode mode) %) (:ui/open-files (current)))})
-      (patch! {:ui/query-format mode}))))
+  (let [s (current) document (read-editor-document s) key (:key document)
+        plan (js->clj (document-modes/planModeChange (clj->js document) mode) :keywordize-keys true)]
+    (when (and (#{"sql" "edn" "text"} mode) (not= "none" (:kind plan))
+               (not (get-in s [:ui/file :read_only])) (not (:ui/loading-file s)))
+      (let [id (project-id) request-id (swap! conversion-counter inc)]
+        (try
+          (patch! {:ui/converting {:key key :id request-id} :ui/error nil :ui/notice nil})
+          (-> (if (= "convert" (:kind plan)) (convert-document! document mode)
+                (js/Promise.resolve (merge document (dissoc plan :kind))))
+              (.then (fn [view]
+                       (if (:ui/always-format s)
+                         (-> (format-document-content! (:content view) mode (:ui/format-options s))
+                             (.then (fn [content]
+                                      (let [formatted (assoc view :content content)]
+                                        (assoc formatted :conversion
+                                          (js->clj (document-modes/recordConversion (clj->js document) (clj->js formatted)) :keywordize-keys true))))))
+                         view)))
+              (.then (fn [view]
+                       (when (and (= id (project-id)) (= request-id (get-in (current) [:ui/converting :id])))
+                         (when (document-modes/matchesConversionRequest (clj->js (read-document-by-key key)) (clj->js document))
+                           (update-document-view! key view)
+                           (when (= key (:key (read-editor-document (current)))) (editor/focusQueryEditor)))
+                         (patch! {:ui/converting nil}))))
+              (.catch (fn [error]
+                        (when (= request-id (get-in (current) [:ui/converting :id]))
+                          (patch! {:ui/converting nil}) (report-error! error)))))
+          (catch :default error (patch! {:ui/converting nil}) (report-error! error)))))))
 (defn activate-query! []
   (swap! file-load-counter inc)
-  (patch! {:ui/file nil :ui/loading-file nil :ui/content "" :ui/saved-content "" :ui/model-id nil :ui/conflict false :ui/error nil}))
+  (patch! {:ui/file nil :ui/loading-file nil :ui/content "" :ui/saved-content "" :ui/model-id nil :ui/conflict false :ui/error nil
+           :ui/scratch-visible true :ui/parameters (:ui/query-parameters (current))}))
 (defn update-file-selection! [path selection]
   (patch! {:ui/open-files (mapv #(if (= path (:path %)) (assoc % :selection (js->clj selection :keywordize-keys true)) %) (:ui/open-files (current)))}))
 (defn activate-file! [file]
   (swap! file-load-counter inc)
   (patch! {:ui/file (dissoc file :draft) :ui/loading-file nil :ui/content (:draft file (:content file)) :ui/saved-content (:content file)
+           :ui/parameters (:parameters file "{}")
            :ui/model-id (:unique_id (first (filter #(= (:path file) (:path %)) (vals (:model/id (current))))))
            :ui/tab "query" :ui/conflict false :ui/error nil}))
 (defn close-file! [path]
   (let [files (:ui/open-files (current)) file (first (filter #(= path (:path %)) files))]
-    (when (or (= (:draft file) (:content file)) (js/confirm "Discard the unsaved changes in this file?"))
+    (when (or (not (file-dirty? file)) (js/confirm "Discard the unsaved changes in this file?"))
       (let [remaining (filterv #(not= path (:path %)) files)]
         (patch! {:ui/open-files remaining})
         (when (= path (get-in (current) [:ui/file :path]))
           (if-let [next-file (last remaining)] (activate-file! next-file)
-            (patch! {:ui/file nil :ui/content "" :ui/saved-content "" :ui/model-id nil})))))))
+            (activate-query!)))))))
+(defn new-file! [& [document]]
+  (let [number (swap! untitled-counter inc)
+        file {:path (str "untitled:" number) :name (str "Untitled-" number) :editor-id (str "untitled:" number)
+              :untitled true :native-mode "sql" :editor-mode (:mode document "sql") :content "" :draft (:content document "")
+              :parameters (:parameters document "{}") :selection {:from 0 :to 0 :head 0} :conversion (:conversion document)}]
+    (patch! {:ui/open-files (conj (:ui/open-files (current)) file)})
+    (activate-file! file)
+    (js/requestAnimationFrame editor/focusQueryEditor)))
+(defn close-active-document! []
+  (if-let [file (:ui/file (current))] (close-file! (:path file))
+    (when (or (not (query-dirty? (current))) (js/confirm "Discard the unsaved scratch query?"))
+      (let [next-file (last (:ui/open-files (current)))]
+        (patch! {:ui/scratch-visible (nil? next-file) :ui/query-content "" :ui/query-saved-content "" :ui/query-saved-format "sql" :ui/query-format "sql"
+                 :ui/query-conversion nil :ui/query-parameters "{}" :ui/query-selection {:from 0 :to 0 :head 0}
+                 :ui/editor-revision (inc (:ui/editor-revision (current)))})
+        (if next-file (activate-file! next-file) (activate-query!))))))
 (defn load-file! [path & [draft]]
   (let [id (project-id) opened (first (filter #(= path (:path %)) (:ui/open-files (current))))]
     (if (and opened (nil? draft)) (activate-file! opened)
@@ -255,24 +350,59 @@
                       (patch! {:ui/loading-file nil}) (report-error! error)))))))))
 (defn select-model! [model]
   (when (:path model) (load-file! (:path model))))
+(defn prepare-file-save! [file path]
+  (let [document (file-document file) native-mode (native-file-format {:path path})
+        content (document-modes/canonicalContent (clj->js document) native-mode)
+        bound-copy? (and (:untitled file) (#{"sql" "edn"} native-mode) (seq (js->clj (js/JSON.parse (:parameters document)))))]
+    (if (and (some? content) (not bound-copy?)) (js/Promise.resolve {:content content :conversion (:conversion file)})
+      (let [mode (if (= native-mode "text") "sql" native-mode)]
+        (convert-document! (assoc document :path (:path file)) mode mode)))))
+(defn persist-file! [file path create?]
+  (let [id (project-id) key (:path file) request-id (swap! conversion-counter inc)]
+    (try
+      (patch! {:ui/submitting true :ui/converting {:key key :id request-id} :ui/error nil})
+      (-> (prepare-file-save! file path)
+          (.then (fn [prepared]
+                   (when (= request-id (get-in (current) [:ui/converting :id])) (patch! {:ui/converting nil}))
+                   (-> (request! (if create? "POST" "PUT") (str "/api/projects/" id (if create? "/files" "/file"))
+                         (cond-> {:path path :content (:content prepared)} (not create?) (assoc :expected_revision (:revision file))))
+                       (.then (fn [saved] {:saved saved :prepared prepared})))))
+          (.then (fn [{:keys [saved prepared]}]
+                   (when (= id (project-id))
+                     (let [files (mapv (fn [opened]
+                                        (if (not= key (:path opened)) opened
+                                          (let [unchanged? (document-modes/matchesConversionRequest (clj->js (file-document opened)) (clj->js (file-document file)))
+                                                adopt? (and unchanged? (:untitled file) (= (resolve-file-format opened) (:mode prepared)))]
+                                            (cond-> (assoc (merge opened saved) :untitled false :name (:name saved (last (str/split path #"/"))))
+                                              unchanged? (assoc :conversion (:conversion prepared))
+                                              adopt? (assoc :draft (:content prepared) :parameters (:parameters prepared) :conversion nil))))) (:ui/open-files (current)))
+                           opened (first (filter #(= path (:path %)) files))]
+                       (patch! (cond-> {:ui/open-files files :ui/submitting false :ui/save-dialog nil :ui/conflict false :ui/notice "File saved to your project."}
+                                 (= key (get-in (current) [:ui/file :path]))
+                                 (assoc :ui/file (dissoc opened :draft) :ui/content (:draft opened) :ui/parameters (:parameters opened "{}")
+                                        :ui/saved-content (:content saved))
+                                 (and (:origin-query file) (= (:draft file) (:ui/query-content (current))))
+                                 (assoc :ui/query-saved-content (:draft file) :ui/query-saved-format (resolve-file-format file))))
+                       (load-files! id) (load-models! id) (load-changes! id)))))
+          (.catch (fn [error]
+                    (when (= id (project-id))
+                      (patch! {:ui/submitting false :ui/converting nil})
+                      (if (and (not create?) (= 409 (.-status error)) (not (str/starts-with? (.-message error) "Wait for")))
+                        (patch! {:ui/conflict true :ui/error "This file changed on disk. Your draft is preserved. Copy it before reloading, or keep editing."})
+                        (report-error! error))))))
+      (catch :default error (patch! {:ui/submitting false :ui/converting nil}) (report-error! error)))))
 (defn save-file! []
-  (let [s (current) file (:ui/file s) id (project-id)]
-    (when (and file (not (:read_only file)) (nil? (:ui/loading-file s)))
-      (patch! {:ui/submitting true :ui/error nil})
-      (-> (request! "PUT" (api-path "/file")
-            {:path (:path file) :content (:ui/content s) :expected_revision (:revision file)})
-        (.then (fn [saved]
-                 (when (= id (project-id))
-                   (patch! (cond-> {:ui/open-files (mapv (fn [opened] (if (= (:path opened) (:path saved)) (merge opened saved) opened)) (:ui/open-files (current)))
-                                    :ui/submitting false :ui/conflict false :ui/notice "File saved to your project."}
-                             (= (:path saved) (get-in (current) [:ui/file :path]))
-                             (assoc :ui/file (merge (:ui/file (current)) saved) :ui/saved-content (:content saved))))
-                   (load-models! id) (load-changes! id))))
-        (.catch (fn [e]
-                  (if (and (= 409 (.-status e)) (not (str/starts-with? (.-message e) "Wait for")))
-                    (patch! {:ui/conflict true :ui/submitting false
-                             :ui/error "This file changed on disk. Your draft is preserved. Copy it before reloading, or keep editing."})
-                    (report-error! e))))))))
+  (let [s (current) file (first (filter #(= (get-in s [:ui/file :path]) (:path %)) (:ui/open-files s)))]
+    (cond
+      (or (:ui/submitting s) (:ui/loading-file s) (:ui/converting s) (:read_only file)) nil
+      (nil? file) (do (new-file! (read-editor-document s))
+                     (patch! {:ui/open-files (mapv #(if (= (:path %) (get-in (current) [:ui/file :path])) (assoc % :origin-query true) %) (:ui/open-files (current)))})
+                     (save-file!))
+      (:untitled file) (patch! {:ui/save-dialog {:key (:path file) :path (str "models/" (str/lower-case (:name file)) ".sql")}})
+      (file-dirty? file) (persist-file! file (:path file) false))))
+(defn save-new-file! [path]
+  (when-let [file (first (filter #(= (:path %) (get-in (current) [:ui/save-dialog :key])) (:ui/open-files (current))))]
+    (persist-file! file (str/trim path) true)))
 (defn job-options []
   (let [s (current) defer (and (:ui/defer s) (get-in s [:ui/project :baseline]))]
     {:target (:ui/target s) :defer (boolean defer) :favor_state (boolean (and defer (:ui/favor-state s)))}))
@@ -332,22 +462,33 @@
       (-> (request! "GET" (str (api-path "/catalog?target=") (js/encodeURIComponent target)))
         (.then #(when (and (= id (project-id)) (= target (:ui/target (current)))) (patch! {:ui/catalog (:relations %)})))
         (.catch (fn [_] (when (= id (project-id)) (patch! {:ui/catalog []}))))))))
-(defn pretty-edn [query] (with-out-str (pprint/pprint query)))
 (defn save-format-options! [options]
   (patch! {:ui/format-options options})
   (js/localStorage.setItem "workbench.sql-format-options" (js/JSON.stringify (clj->js options))))
 (defn format-query! []
-  (let [s (current) document (read-editor-document s) sql? (= "sql" (:format document))]
-    (try
-      (update-document-content! (if sql? (editor/formatSql (:content document) (clj->js (:ui/format-options s))) (pretty-edn (reader/read-string (:content document)))))
-      (patch! {:ui/error nil})
-      (catch :default error (report-error! error)))))
+  (let [s (current) document (read-editor-document s) key (:key document)
+        id (project-id) request-id (swap! conversion-counter inc)]
+    (when-not (or (:ui/converting s) (:ui/submitting s) (:ui/loading-file s) (get-in s [:ui/file :read_only]))
+      (try
+        (patch! {:ui/converting {:key key :id request-id :operation "format"} :ui/error nil})
+        (-> (format-document-content! (:content document) (:mode document) (:ui/format-options s))
+            (.then (fn [content]
+                     (when (and (= id (project-id)) (= request-id (get-in (current) [:ui/converting :id])))
+                       (when (document-modes/matchesConversionRequest (clj->js (read-document-by-key key)) (clj->js document))
+                         (update-document-view! key (assoc document :content content))
+                         (when (= key (:key (read-editor-document (current)))) (editor/focusQueryEditor)))
+                       (patch! {:ui/converting nil}))))
+            (.catch (fn [error]
+                      (when (= request-id (get-in (current) [:ui/converting :id]))
+                        (patch! {:ui/converting nil}) (report-error! error)))))
+        (catch :default error (patch! {:ui/converting nil}) (report-error! error))))))
 
 (defn load-query! [job & [rerun?]]
   (let [options (:options job) format (:format options)]
     (activate-query!)
     (patch! {:ui/editor-revision (inc (:ui/editor-revision (current))) :ui/tab "query" :ui/query-format format
              :ui/query-content (or (:editor_content options) (:content options))
+             :ui/query-conversion nil :ui/query-parameters (json-display (:parameters options))
              :ui/parameters (json-display (:parameters options))
              :ui/target (:target options) :ui/dialect (:dialect options)
              :ui/query-selection (or (:selection options) {:from 0 :to 0 :head 0})
@@ -366,6 +507,39 @@
 (defn run-preview! []
   (let [s (current)]
     (submit! "preview" {:model_id (:ui/model-id s) :dialect (:ui/dialect s) :baseline (:ui/baseline-input s)})))
+(defn editor-commands [s]
+  (let [document (read-editor-document s) mode (:mode document) file (:ui/file s)
+        opened (first (filter #(= (:path file) (:path %)) (:ui/open-files s)))
+        blocked? (boolean (or (:read_only file) (:ui/loading-file s) (:ui/submitting s) (:ui/converting s)))
+        template? (boolean (re-find #"\{[\{%]" (:content document)))
+        command (fn [id label category enabled run] {:id id :label label :category category :enabled (boolean enabled) :run run})]
+    [(command "new-file" "New file" "File" true #(new-file!))
+     (command "save-file" "Save file" "File" (not blocked?) save-file!)
+     (command "close-tab" "Close active tab" "File" true close-active-document!)
+     (command "run-query" "Run statement or selection" "Query" (and (#{"sql" "edn"} mode) (not blocked?)) #(run-query! false))
+     (command "run-all" "Run all statements" "Query" (and (= mode "sql") (not blocked?) (not template?)) #(run-query! true))
+     (command "format-document" "Format document" "Editor" (and (#{"sql" "edn"} mode) (not blocked?) (not template?)) format-query!)
+     (command "switch-sql" "Translate query to SQL" "Editor" (not blocked?) #(select-editor-mode! "sql"))
+     (command "switch-edn" "Translate query to EDN" "Editor" (not blocked?) #(select-editor-mode! "edn"))
+     (command "preview-model" "Preview model" "dbt" (and (:ui/model-id s) (not (file-dirty? opened)) (not blocked?)) run-preview!)
+     (command "build-project" "Build project" "dbt" (and (not (file-dirty? opened)) (not blocked?)) build-project!)
+     (command "test-project" "Test project" "dbt" (and (not (file-dirty? opened)) (not blocked?)) #(submit! "test" (build-options (current))))
+     (command "parse-project" "Parse project metadata" "dbt" (not blocked?) #(submit! "parse" {}))
+     (command "toggle-files" "Toggle file explorer" "View" true #(save-layout! {:ui/explorer-visible (not (:ui/explorer-visible (current)))}))
+     (command "toggle-sidebar" "Toggle navigation sidebar" "View" true #(save-layout! {:ui/sidebar-collapsed (not (:ui/sidebar-collapsed (current)))}))
+     (command "show-results" "Show results" "View" true #(inspect-view! "results"))
+     (command "show-lineage" "Show lineage" "View" true #(inspect-view! "lineage"))
+     (command "show-metadata" "Inspect file metadata" "View" true #(inspect-view! "metadata"))
+     (command "show-overview" "Open project overview" "View" true #(inspect-view! "overview"))
+     (command "show-documentation" "Search documentation" "View" true #(inspect-view! "documentation"))
+     (command "show-git" "Open version control" "View" true #(inspect-view! "git"))
+     (command "show-connections" "Manage connections" "View" true #(inspect-view! "connections"))
+     (command "show-routing" "Configure environment routing" "View" true #(inspect-view! "routing"))
+     (command "show-activity" "Show query activity" "View" true #(inspect-view! "activity"))
+     (command "show-changes" "Show file changes" "View" true #(inspect-view! "changes"))
+     (command "show-runs" "Inspect runs and tests" "View" true #(inspect-view! "runs"))
+     (command "toggle-theme" "Toggle light and dark theme" "View" true #(choose-theme! (if (= (:ui/theme (current)) "dark") "light" "dark")))
+     (command "reset-layout" "Reset workspace layout" "View" true #(save-layout! (select-keys initial layout-keys)))]))
 (defn run-compare! []
   (let [s (current)]
     (submit! "compare" {:left_result_id (get-in s [:ui/result :id]) :right_result_id (:ui/right-result s)
@@ -613,16 +787,28 @@
         (control "Expression width" :expressionWidth [[0 "Always break expressions"] [40 "40 characters"] [50 "50 characters"] [80 "80 characters"] [120 "120 characters"]])
         (control "Logical operator breaks" :logicalOperatorNewline [["before" "Before AND / OR"] ["after" "After AND / OR"]])
         (control "Blank lines between queries" :linesBetweenQueries [[1 "1"] [2 "2"] [3 "3"]])
+        (dom/label #js {:className "check-control"}
+          (dom/input #js {:type "checkbox" :checked (:ui/always-format props) :aria-label "Always format on mode switch"
+                          :onChange #(let [enabled (.. % -target -checked)]
+                                       (patch! {:ui/always-format enabled}) (save-preference! "workbench.always-format" (str enabled)))})
+          "Always format on mode switch")
         (dom/p #js {:className "hint"} "Preferences are saved in this browser. Format applies them to the active document.")) "button small")))
 
 (defn render-document-tabs [props]
   (dom/nav #js {:className "file-tabs" :aria-label "Open files"}
-    (dom/div #js {:className (str "file-tab " (when-not (:ui/file props) "active")) :key "scratch-query"}
-      (dom/button #js {:title "Scratch query" :onClick activate-query!} (icon "command") "Query 1"))
+    (when (:ui/scratch-visible props)
+      (dom/div #js {:className (str "file-tab " (when-not (:ui/file props) "active")) :key "scratch-query"}
+        (dom/button #js {:title "Scratch query" :aria-label "Query 1" :onClick activate-query!} (icon "command") "Query 1"
+          (when (query-dirty? props) (dom/span #js {:className "tab-dirty" :aria-hidden true} "*")))
+        (dom/button #js {:className "icon-button" :aria-label "Close Query 1" :onClick #(do (activate-query!) (close-active-document!))} (icon "close"))))
     (map (fn [file]
            (dom/div #js {:className (str "file-tab " (when (= (:path file) (get-in props [:ui/file :path])) "active")) :key (:path file)}
-             (dom/button #js {:onClick #(activate-file! file) :title (:path file)} (icon "file") (last (str/split (:path file) #"/")) (when (not= (:draft file) (:content file)) " •"))
-             (dom/button #js {:className "icon-button" :aria-label (str "Close " (:path file)) :onClick #(close-file! (:path file))} (icon "close")))) (:ui/open-files props))))
+             (dom/button #js {:onClick #(activate-file! file) :title (str (:path file) (when (file-dirty? file) " · Unsaved changes"))
+                             :aria-label (or (:name file) (last (str/split (:path file) #"/")))}
+               (icon "file") (or (:name file) (last (str/split (:path file) #"/")))
+               (when (file-dirty? file) (dom/span #js {:className "tab-dirty" :aria-hidden true} "*")))
+             (dom/button #js {:className "icon-button" :aria-label (str "Close " (:path file)) :onClick #(close-file! (:path file))} (icon "close")))) (:ui/open-files props))
+    (dom/button #js {:className "new-file-tab icon-button" :aria-label "New file" :title "New file" :onClick #(new-file!)} (icon "plus"))))
 
 (defn render-document-editors [props]
   (let [schema (clj->js (into {} (map (fn [relation] [(:name relation) (mapv :name (:columns relation))]) (:ui/catalog props))))]
@@ -630,34 +816,35 @@
       (dom/div #js {:key "scratch-query" :className "file-editor-pane" :hidden (boolean (:ui/file props))}
         (react/createElement editor/QueryEditor
           #js {:key (:ui/editor-revision props) :value (:ui/query-content props) :format (:ui/query-format props) :schema schema
-               :readOnly (boolean (:ui/loading-file props))
+               :readOnly (boolean (or (:ui/loading-file props) (= "scratch-query" (get-in props [:ui/converting :key]))))
                :onChange #(patch! {:ui/query-content %})
                :onSelection #(patch! {:ui/query-selection (js->clj % :keywordize-keys true)})
                :selection (clj->js (:ui/query-selection props)) :onRun (fn [all? content selection] (run-query! all? content selection))}))
       (map (fn [file]
-             (dom/div #js {:key (:path file) :className "file-editor-pane" :hidden (not= (:path file) (get-in props [:ui/file :path]))}
+             (dom/div #js {:key (:editor-id file (:path file)) :className "file-editor-pane" :hidden (not= (:path file) (get-in props [:ui/file :path]))}
                (react/createElement editor/QueryEditor
                  #js {:value (:draft file) :format (resolve-file-format file) :schema schema :label "File editor" :file true
-                      :readOnly (boolean (or (:read_only file) (:ui/loading-file props))) :selection (clj->js (:selection file {:from 0 :to 0 :head 0}))
+                      :readOnly (boolean (or (:read_only file) (:ui/loading-file props) (= (:path file) (get-in props [:ui/converting :key])))) :selection (clj->js (:selection file {:from 0 :to 0 :head 0}))
                       :onSelection #(update-file-selection! (:path file) %)
                       :onChange #(update-file-content! (:path file) %) :onSave save-file!
                       :onRun (fn [all? content selection] (run-query! all? content selection))}))) (:ui/open-files props)))))
 
 (defn query-editor [props]
   (let [document (read-editor-document props) mode (:format document) edn? (= "edn" mode)
-        file (:ui/file props) dirty (and file (not= (:ui/content props) (:ui/saved-content props)))
+        file (:ui/file props) opened (first (filter #(= (:path file) (:path %)) (:ui/open-files props))) dirty (file-dirty? opened)
         template? (and file (re-find #"\{[\{%]" (:content document)))
         read-only? (:read_only file)
-        blocked? (or read-only? (:ui/submitting props) (:ui/loading-file props))]
+        converting? (= (:key document) (get-in props [:ui/converting :key]))
+        blocked? (or read-only? (:ui/submitting props) (:ui/loading-file props) converting?)]
     (dom/div #js {:className "query-workspace" :style #js {"--query-split" (str (:ui/query-split props) "%")}}
       (dom/div #js {:className "code-card file-workspace"}
         (render-document-tabs props)
         (dom/div #js {:className "code-toolbar query-toolbar"}
           (dom/div #js {:className "segmented"}
-            (button "SQL" #(select-editor-mode! "sql") (when (= "sql" mode) "selected") read-only?)
-            (button "EDN" #(select-editor-mode! "edn") (when edn? "selected") read-only?)
+            (button "SQL" #(select-editor-mode! "sql") (when (= "sql" mode) "selected") blocked?)
+            (button "EDN" #(select-editor-mode! "edn") (when edn? "selected") blocked?)
             (when (and file (not (str/ends-with? (:path file) ".sql")) (not (str/ends-with? (:path file) ".edn")))
-              (button "Text" #(select-editor-mode! "text") (when (= "text" mode) "selected") read-only?))
+              (button "Text" #(select-editor-mode! "text") (when (= "text" mode) "selected") blocked?))
             (dom/button #js {:className "button" :disabled true :title "Visual query builder is disabled"} "Visual"))
           (dom/div #js {:className "query-run-actions"}
             (button "Format" format-query! "small" (or blocked? (= "text" mode) template?))
@@ -672,13 +859,14 @@
                              (let [q (js->clj query :keywordize-keys true)]
                                (activate-query!)
                                (patch! {:ui/query-content (:content q) :ui/query-format (if (= "visual" (:format q)) "edn" (:format q))
+                                        :ui/query-conversion nil :ui/query-parameters (:parameters q "{}")
                                         :ui/parameters (:parameters q "{}") :ui/dialect (:dialect q "duckdb")
                                         :ui/query-selection {:from 0 :to 0 :head 0} :ui/error nil})))})
             (floating-menu "Query settings" (icon "settings") "query-settings-menu"
               (dom/div {}
                 (field-label "Parameters"
                   (dom/input #js {:aria-label "Parameters" :className "mono" :value (:ui/parameters props)
-                                  :onChange #(value! :ui/parameters %)}))
+                                  :onChange update-document-parameters!}))
                 (field-label "Execution dialect" (dialect-control props))
                 (field-label "Maximum result rows" (dom/input #js {:type "number" :min 1 :max 100000 :value (:ui/max-rows props) :aria-label "Maximum result rows" :onChange #(patch! {:ui/max-rows (js/Number (.. % -target -value))})}))
                 (field-label "Timeout in seconds" (dom/input #js {:type "number" :min 1 :max 120 :value (:ui/timeout props) :aria-label "Timeout in seconds" :onChange #(patch! {:ui/timeout (js/Number (.. % -target -value))})}))))
@@ -686,11 +874,17 @@
               (button (if edn? "Run query" "Run statement") #(run-query! false) "primary" (or blocked? template?)))
             (when (= "sql" mode) (button "Run all" #(run-query! true) "small" (or blocked? template?)))))
         (when (:ui/loading-file props) (dom/div #js {:className "file-loading" :aria-live "polite"} (str "Opening " (:ui/loading-file props) "…")))
+        (when converting? (dom/div #js {:className "file-loading" :aria-live "polite"}
+                           (if (= "format" (get-in props [:ui/converting :operation])) "Formatting document…" "Translating document…")))
         (when read-only? (dom/div #js {:className "file-loading" :role "status"} (str (:preview_reason file) " File details are available in Metadata.")))
         (dom/div #js {:className "file-actions"}
-          (dom/span #js {:className "hint document-path" :title (:path document)} (or (:path document) "Scratch query · SQL / EDN changes the mode, preserves the text"))
+          (dom/span #js {:className "hint document-path" :title (:path document)}
+            (cond (:untitled file) (str (:name file) " · Save to choose a project path")
+                  file (:path document) :else "Scratch query · SQL / EDN translates the query"))
+          (when (and file (not= mode (native-file-format file)) (#{"sql" "edn"} (native-file-format file)))
+            (dom/span #js {:className "representation-hint"} (str (str/upper-case mode) " view · saves as " (str/upper-case (native-file-format file)))))
           (when dirty (dom/span #js {:className "unsaved"} "Unsaved"))
-          (when file (button "Save file" save-file! "small" (or (not dirty) blocked?)))
+          (button "Save file" save-file! "small" (or (and file (not dirty)) blocked?))
           (when (:ui/model-id props) (button "Preview model" run-preview! "small" (or dirty blocked?)))
           (dom/kbd {} "Shift+Enter / F5"))
         (render-document-editors props))
@@ -845,7 +1039,7 @@
          :onRun #(submit! %1 (js->clj %2 :keywordize-keys true))
          :onTarget (fn [id type] (patch! {:ui/target id :ui/dialect (if (= type "snowflake") "snowflake" "duckdb")}) (load-catalog!))
          :onRefresh refresh-project!
-         :onQuery (fn [content dialect] (activate-query!) (patch! {:ui/query-content content :ui/query-format "sql" :ui/dialect dialect :ui/query-selection {:from 0 :to 0 :head 0}}))}))
+         :onQuery (fn [content dialect] (activate-query!) (patch! {:ui/query-content content :ui/query-format "sql" :ui/query-conversion nil :ui/query-parameters "{}" :ui/parameters "{}" :ui/dialect dialect :ui/query-selection {:from 0 :to 0 :head 0}}))}))
 
 (defn bottom-workspace [props]
   (let [view (:ui/bottom-tab props)]
@@ -895,7 +1089,8 @@
               :else (file-tree filtered models (get-in props [:ui/file :path]) ""))))))))
 
 (defsc Root [_ props]
-  {:query [:ui/max-rows :ui/timeout :ui/query-split :ui/bottom-tab :ui/sidebar-collapsed :ui/sidebar-width :ui/context-width :ui/files-width :ui/file-view :ui/files-search :ui/explorer-visible :ui/inspector :ui/open-files :ui/status-job :ui/results-view :ui/compare-result :ui/compare-page :ui/theme :ui/projects :ui/project :ui/files :ui/results :ui/target :ui/defer :ui/favor-state
+  {:query [:ui/converting :ui/save-dialog :ui/always-format :ui/scratch-visible :ui/query-conversion :ui/query-parameters :ui/query-saved-content :ui/query-saved-format
+           :ui/max-rows :ui/timeout :ui/query-split :ui/bottom-tab :ui/sidebar-collapsed :ui/sidebar-width :ui/context-width :ui/files-width :ui/file-view :ui/files-search :ui/explorer-visible :ui/inspector :ui/open-files :ui/status-job :ui/results-view :ui/compare-result :ui/compare-page :ui/theme :ui/projects :ui/project :ui/files :ui/results :ui/target :ui/defer :ui/favor-state
            :ui/tab :ui/model-id :ui/file :ui/loading-file :ui/content :ui/saved-content :ui/selected-job
            :ui/events :ui/event-cursor :ui/result :ui/page :ui/error :ui/notice :ui/submitting
            :ui/open-path :ui/profiles :ui/query-format :ui/query-content :ui/parameters
@@ -904,7 +1099,7 @@
            {:ui/models (comp/get-query ModelRow)} {:ui/jobs (comp/get-query JobRow)}]
    :initial-state (fn [_] initial)}
   (let [project (:ui/project props) selected (:ui/model-id props)
-        dirty (not= (:ui/content props) (:ui/saved-content props))]
+        dirty (file-dirty? (first (filter #(= (get-in props [:ui/file :path]) (:path %)) (:ui/open-files props))))]
     (dom/div #js {:className "app-shell"}
       (dom/header #js {:className "app-header"}
         (dom/button #js {:className "brand" :onClick choose-project! :title "All projects"}
@@ -918,7 +1113,8 @@
         (when project
           (react/createElement panels/ProjectBranch #js {:project (clj->js project) :notice (:ui/notice props) :onInspect inspect-view!}))
         (when project
-          (react/createElement panels/CommandPalette #js {:project (clj->js project) :onOpenFile load-file! :onInspect inspect-view!}))
+          (react/createElement command-center/CommandCenter #js {:key (:id project) :commands (clj->js (editor-commands props)) :files (clj->js (:ui/files props))
+                                                                 :onOpenFile load-file! :onFocusEditor #(js/requestAnimationFrame editor/focusQueryEditor)}))
         (when project
           (dom/div #js {:className "run-toolbar"}
             (dom/div #js {:className "run-actions"}
@@ -960,6 +1156,10 @@
             (pane-resizer props :ui/files-width "Resize files" "x" "--files-width" ".workspace" ".files-pane" -1)
             (file-pane props))))
 
+      (react/createElement workspace-ui/SaveFileDialog
+        #js {:open (boolean (:ui/save-dialog props)) :initialPath (get-in props [:ui/save-dialog :path])
+             :fileName (get-in props [:ui/file :name]) :busy (boolean (:ui/submitting props)) :error (:ui/error props)
+             :onSave save-new-file! :onClose #(patch! {:ui/save-dialog nil :ui/error nil})})
       (global-status-bar props))))
 
 
@@ -968,6 +1168,7 @@
 (defn ^:export init []
   (refresh)
   (load-layout!)
+  (patch! {:ui/always-format (= "true" (read-preference "workbench.always-format"))})
   (try (when-let [saved (js/localStorage.getItem "workbench.sql-format-options")] (patch! {:ui/format-options (merge (:ui/format-options initial) (js->clj (js/JSON.parse saved) :keywordize-keys true))})) (catch :default _ nil))
   (let [saved-theme (read-preference "workbench.theme")
         theme (if (#{"light" "dark" "system"} saved-theme) saved-theme "system")]

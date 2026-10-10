@@ -44,7 +44,7 @@
       "projects"
       (do
         (when (and id (not (#{"demo" "open"} id))) (workspace/find-project directory id))
-        (when (and (= "POST" method) (not (or (#{"demo" "open"} id) (#{"jobs" "query" "baseline" "github" "git" "connections" "routing"} action)))) (storage/fail! "Method not allowed." 405))
+        (when (and (= "POST" method) (not (or (#{"demo" "open"} id) (#{"jobs" "query" "baseline" "github" "git" "connections" "routing" "files"} action)))) (storage/fail! "Method not allowed." 405))
         (cond
         (and (= "GET" method) (nil? id)) (json-response {:projects (workspace/list-projects directory)})
         (and (= "POST" method) (= id "demo")) (json-response (workspace/create-demo! directory) 201)
@@ -97,13 +97,18 @@
           (storage/fail! "Method not allowed." 405))
         (= action "models") (json-response {:models (workspace/list-models directory id)})
         (= action "catalog") (json-response (if (or (= detail "resources") (= (:detail query) "resources")) (inspection/read-catalog directory id) (processor/read-catalog! directory id (:target query))))
-        (= action "files") (json-response {:files (workspace/list-files directory id)})
+        (= action "files") (case method
+                             "GET" (json-response {:files (workspace/list-files directory id)})
+                             "POST" (locking engine (runtime/require-idle! engine id)
+                                      (json-response (workspace/create-file! directory id (validation/validate! :create-file body)) 201))
+                             (storage/fail! "Method not allowed." 405))
         (= action "file") (case method
                             "GET" (json-response (workspace/read-file directory id (:path query)))
                             "PUT" (locking engine (runtime/require-idle! engine id) (json-response (workspace/save-file! directory id (validation/validate! :save body))))
                             (storage/fail! "Method not allowed." 405))
         (= action "changes") (json-response {:changes (workspace/list-changes directory id)})
         (and (= action "query") (= detail "convert") (= method "POST")) (json-response (processor/convert-query directory id (validation/validate! :convert body)))
+        (and (= action "query") (= detail "format") (= method "POST")) (json-response (processor/format-edn (:content (validation/validate! :format body))))
         (and (= action "baseline") (= detail "import") (= method "POST"))
         (locking engine (runtime/require-idle! engine id) (json-response (do (validation/validate! :import body) (workspace/register-baseline! directory id (:artifact_dir body) (:target body))) 201))
         (= action "jobs") (case method "GET" (json-response {:jobs (runtime/list-jobs engine id)})
@@ -141,15 +146,23 @@
     (when-not (#{"127.0.0.1" "localhost" "[::1]" "::1"} hostname) (storage/fail! "This server accepts localhost requests only." 403))
     (when (and origin (or (= "null" origin) (not= host (.getRawAuthority (URI. origin))))) (storage/fail! "This local API accepts same-origin requests only." 403))
     (when (= "cross-site" (.getFirst headers "Sec-Fetch-Site")) (storage/fail! "Cross-site requests are disabled." 403))))
+(defn request-body-limit [method path]
+  (if (or (and (= method "POST") (re-matches #"/api/projects/[^/]+/files" path))
+          (and (= method "PUT") (re-matches #"/api/projects/[^/]+/file" path)))
+    (+ (* 6 workspace/max-file-preview-bytes) 32768)
+    2000000))
+(defn decode-request-body [bytes]
+  (or (workspace/decode-file-bytes bytes) (storage/fail! "Request JSON must use valid UTF-8.")))
 (defn handle-exchange! [app ^HttpExchange exchange]
   (let [response (try
                    (validate-request! exchange)
                    (let [uri (.getRequestURI exchange) path (.getPath uri) method (.getRequestMethod exchange)]
                      (if (str/starts-with? path "/api/")
-                       (let [bytes (.readNBytes (.getRequestBody exchange) 2000001)]
-                         (when (> (alength bytes) 2000000) (storage/fail! "Request body is too large." 413))
+                       (let [limit (request-body-limit method path)
+                             bytes (.readNBytes (.getRequestBody exchange) (inc limit))]
+                         (when (> (alength bytes) limit) (storage/fail! "Request body is too large." 413))
                          (handle-api! app method path (decode-query (.getRawQuery uri))
-                                      (if (pos? (alength bytes)) (try (json/parse-string (String. bytes StandardCharsets/UTF_8) true)
+                                      (if (pos? (alength bytes)) (try (json/parse-string (decode-request-body bytes) true)
                                                                      (catch Exception _ (storage/fail! "Invalid JSON request."))) {})))
                        (if (and (= method "GET") (or (= path "/") (str/starts-with? path "/static/")))
                          (static-response path) (storage/fail! "Route not found." 404))))
