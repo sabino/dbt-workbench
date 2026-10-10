@@ -448,9 +448,11 @@
 (defn select-job! [id]
   (patch! {:ui/selected-job id :ui/events [] :ui/event-cursor 0}))
 (defn cancel-job! [id]
-  (-> (request! "POST" (str "/api/jobs/" id "/cancel") {})
-    (.then #(when-not (= "query" (:kind %)) (patch! {:ui/notice (str "Cancellation requested for " (:kind %) ".")})))
-    (.catch report-error!)))
+  (let [project (project-id)]
+    (-> (request! "POST" (str "/api/jobs/" id "/cancel") {})
+      (.then (fn [_]
+               (when (= project (project-id)) (patch! {:ui/status-job id :ui/notice nil}))))
+      (.catch report-error!))))
 (defn load-result! [id & [offset background?]]
   (let [offset (or offset 0) project (project-id)]
     (-> (js/Promise.all #js [(request! "GET" (str "/api/results/" id))
@@ -616,10 +618,6 @@
         (.then (fn [data]
                  (when (= id (project-id))
                    (let [jobs (:jobs data)
-                         ;; A job may finish before its first status poll. Inspect the
-                         ;; current selection here, not the selection at request start.
-                         selected-now (:ui/selected-job (current))
-                         job (first (filter #(= selected-now (:id %)) jobs))
                          submitted-job (first (filter #(= (:ui/status-job (current)) (:id %)) jobs))
                          finished (filterv #(and (= "succeeded" (:status %))
                                                  (not (contains? @completed-jobs (:id %)))) jobs)]
@@ -627,9 +625,6 @@
                      (when (seq finished)
                        (swap! completed-jobs into (map :id finished))
                        (refresh-project!))
-                     (when (and (#{"succeeded" "failed" "cancelled" "interrupted"} (:status job))
-                                (:ui/notice (current)))
-                       (patch! {:ui/notice nil}))
                      ;; Submitted jobs open results once. Selecting recorded Activity
                      ;; changes its details without navigating away from the panel.
                      (when (and (= "succeeded" (:status submitted-job)) (:result_id submitted-job)

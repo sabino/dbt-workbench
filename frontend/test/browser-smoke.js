@@ -568,6 +568,11 @@ try {
   await expect(page.locator(".inspector-card[role=status]")).toContainText("Routed relations are readable");
   await page.getByRole("button", {name: "Save routing", exact: true}).click();
   await expect(page.getByRole("status", {name: "Workbench status"})).toContainText("Model routing saved");
+  // Background job monitoring must not erase feedback from a later user action.
+  for (let poll = 0; poll < 2; poll += 1) {
+    await page.waitForResponse(response => response.request().method() === "GET" && response.url().endsWith("/projects/demo-jaffle-shop/jobs"));
+  }
+  await expect(page.getByRole("status", {name: "Workbench status"})).toContainText("Model routing saved");
   await page.screenshot({path: join(output, "routing.png"), fullPage: true});
   await page.getByRole("button", {name: "Clear overrides", exact: true}).click();
   await page.getByRole("button", {name: "Save routing", exact: true}).click();

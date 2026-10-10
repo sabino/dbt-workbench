@@ -84,6 +84,7 @@ Layout checks verify the following:
 Resizing checks exercise pointer dragging and arrow keys.
 Navigation collapse, explorer visibility, file views, pane widths, and vertical splits survive reload.
 Reset layout restores defaults. The fixed global status bar remains at the viewport bottom while scrolling.
+Background job polling preserves action notices, including saved model routing feedback.
 Project and theme choices persist. Choose project clears the stored selection and reopens the chooser.
 
 Browser workflows also inspect documentation, lineage dependencies, dbt artifacts, local connection health, schema discovery, and routing overrides.
