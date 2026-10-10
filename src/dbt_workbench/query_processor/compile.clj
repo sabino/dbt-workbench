@@ -37,7 +37,7 @@
         (and (#{:sum :count :min :max :avg} operator) (or (= 1 (count args)) (and (= :count operator) (empty? args)))) [operator (if (seq args) (compile-expression alias parameters (first args)) :*)]
         (and (= :coalesce operator) (<= 2 (count args))) (into [:coalesce] (map #(compile-expression alias parameters %) args))
         :else (storage/fail! (str "Unsupported operator or arity: " operator))))))
-(defn compile-structured [query store parameters dialect logical?]
+(defn compile-structured [query store parameters dialect logical? & [{:keys [inline?]}]]
   (when-not (malli/validate structured-schema query) (storage/fail! "Invalid structured EDN query. Check its fields and operator values."))
   (let [alias (or (get-in query [:from :as]) "m") source (store/resolve-source store (:from query) logical?)
         expr #(compile-expression alias parameters %)
@@ -51,7 +51,7 @@
                (contains? query :limit) (assoc :limit (:limit query)))
         names (into #{} (keep #(when (and (vector? %) (= :param (first %))) (keyword (second %)))) (tree-seq coll? seq query))]
     (when-not (= names (set (keys parameters))) (storage/fail! "Parameters must match exactly the query's declared parameters."))
-    (let [[sql & params] (honey/format form {:dialect (if (= "sqlite" dialect) :ansi :ansi) :quoted true :params parameters})]
+    (let [[sql & params] (honey/format form {:dialect (if (= "sqlite" dialect) :ansi :ansi) :quoted true :params parameters :inline (boolean inline?)})]
       {:sql sql :params (vec params) :form form :bindings [source]})))
 (defn compile-native [sql parameters]
   (let [statements (parse/parse-sql sql)]
@@ -63,5 +63,5 @@
 (defn compile [query store options logical?]
   (cond
     (:sql query) (compile-native (:sql query) (or (:parameters options) {}))
-    (:query/version query) (compile-structured query store (or (:parameters options) {}) (:dialect options) logical?)
-    :else (honey-query/compile-query query (or (:parameters options) {}))))
+    (:query/version query) (compile-structured query store (or (:parameters options) {}) (:dialect options) logical? (select-keys options [:inline?]))
+    :else (honey-query/compile-query query (or (:parameters options) {}) (select-keys options [:inline?]))))

@@ -4,30 +4,40 @@ import {mkdtemp, mkdir, writeFile, appendFile, rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {resolve, join} from "node:path";
 import {createServer} from "node:net";
+import {verifyEditorWorkflow} from "./editor-workflow.js";
+import {replaceEditorContent} from "./editor-actions.js";
 
 const projectRoot = resolve(import.meta.dir, "../..");
 const output = resolve(process.env.WORKBENCH_TEST_OUTPUT || "/tmp/workbench-clojure-browser");
 await mkdir(output, {recursive: true});
 const dataDir = await mkdtemp(join(tmpdir(), "workbench-clojure-"));
 const socket = createServer();
-await new Promise(resolve => socket.listen(0, "127.0.0.1", resolve));
+await new Promise(resolve => socket.listen(Number(process.env.WORKBENCH_TEST_PORT || 0), "127.0.0.1", resolve));
 const port = socket.address().port;
 await new Promise(resolve => socket.close(resolve));
 const processHandle = Bun.spawn(["clojure", "-M:run", "--port", String(port), "--data-dir", dataDir], {cwd: projectRoot, stdout: "ignore", stderr: Bun.file(join(output, "server.log"))});
-const base = `http://127.0.0.1:${port}`;
+const serverBase = `http://127.0.0.1:${port}`;
+const base = serverBase;
+const browserBase = process.env.WORKBENCH_TEST_BROWSER_BASE || base;
+const modifier = process.env.WORKBENCH_TEST_BROWSER_CDP || process.platform !== "darwin" ? "Control" : "Meta";
 let browser;
 let page;
-const evidence = {jobs: [], browser_errors: []};
+let discardConfirmed = false;
+const evidence = {jobs: [], browser_errors: [], network_errors: []};
 try {
   for (let attempt = 0; attempt < 200; attempt += 1) {
-    try { if ((await fetch(base + "/api/health")).ok) break; } catch {}
+    try { if ((await fetch(serverBase + "/api/health")).ok) break; } catch {}
     await Bun.sleep(100);
     if (attempt === 199) throw new Error("Clojure server failed to start");
   }
-  browser = await chromium.launch({headless: true});
+  browser = process.env.WORKBENCH_TEST_BROWSER_CDP
+    ? await chromium.connectOverCDP(process.env.WORKBENCH_TEST_BROWSER_CDP)
+    : await chromium.launch({headless: true});
   page = await browser.newPage({viewport: {width: 1536, height: 1024}});
   page.on("pageerror", error => evidence.browser_errors.push(String(error)));
-  await page.goto(base);
+  page.on("requestfailed", request => evidence.network_errors.push({url: request.url(), error: request.failure()}));
+  page.on("dialog", dialog => { if (dialog.type() === "beforeunload" || discardConfirmed) dialog.accept(); else dialog.dismiss(); });
+  await page.goto(browserBase);
   await page.getByRole("button", {name: "Create Jaffle demo", exact: false}).click();
   await expect(page.getByLabel("Target", {exact: true})).toBeVisible();
   await expect(page.locator(".floating-menu:visible")).toHaveCount(0);
@@ -63,7 +73,7 @@ try {
     await menu.click();
   }
   const sql = "SELECT customer_id, SUM(amount) AS revenue\nFROM orders\nGROUP BY customer_id\nORDER BY customer_id;\n\nSELECT COUNT(*) AS count FROM customers;";
-  await editor.fill(sql);
+  await replaceEditorContent(page, editor, sql, modifier);
   await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
   const native = await job(() => editor.press("Shift+Enter"));
   await expect(editor).toBeFocused();
@@ -82,7 +92,7 @@ try {
   // Select the first statement through the DOM selection, then execute it.
   await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
 
-  await editor.fill("SELECT 41 AS value;\nSELECT 42 AS value;");
+  await replaceEditorContent(page, editor, "SELECT 41 AS value;\nSELECT 42 AS value;", modifier);
   await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
   await editor.press("Home");
   await editor.press("Shift+End");
@@ -91,7 +101,7 @@ try {
   await expect(editor).toBeFocused();
   await expect(page.locator(".result-grid tbody td").last()).toHaveText("41");
 
-  await editor.fill(sql);
+  await replaceEditorContent(page, editor, sql, modifier);
   await page.getByRole("button", {name: "Format", exact: true}).click();
   const all = await job(() => page.getByRole("button", {name: "Run all", exact: true}).click());
   await expect(editor).toBeFocused();
@@ -111,7 +121,7 @@ try {
   await expect(page.locator(".job-row")).toHaveCount(1);
   await page.getByLabel("Filter activity").selectOption("all");
   await page.getByRole("button", {name: "Results", exact: true}).click();
-  await editor.fill(sql);
+  await replaceEditorContent(page, editor, sql, modifier);
   await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
   const desktopLayout = await page.evaluate(() => {
     const bounds = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
@@ -129,7 +139,7 @@ try {
   await page.getByLabel("Theme", {exact: true}).selectOption("light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.getByLabel("Theme", {exact: true}).selectOption("dark");
-  await editor.fill("SELECT cus");
+  await replaceEditorContent(page, editor, "SELECT cus", modifier);
   await editor.press("Control+End");
   await editor.press("Control+Space");
   const completion = page.locator(".cm-tooltip-autocomplete");
@@ -139,7 +149,7 @@ try {
   expect(popupStyle.color).toBe("rgb(227, 237, 242)");
   await page.screenshot({path: join(output, "autocomplete-dark.png"), fullPage: true});
   await editor.press("Escape");
-  await editor.fill(sql);
+  await replaceEditorContent(page, editor, sql, modifier);
   await expect(page.getByRole("button", {name: "Model SQL", exact: true})).toHaveCount(0);
   await page.locator(".model-row[title='models/customers.sql']").click();
   await expect(page.locator(".file-tab.active")).toContainText("customers.sql");
@@ -150,8 +160,10 @@ try {
   await expect(page.locator(".files-pane .query-code-editor")).toHaveCount(0);
   const fileText = await activeFile.innerText();
   await page.getByRole("button", {name: "EDN", exact: true}).click();
+  await expect(page.getByRole("alert")).toContainText("Compile dbt templates");
   expect(await activeFile.innerText()).toBe(fileText);
   await expect(page.getByRole("button", {name: "Save file", exact: true})).toBeDisabled();
+  await page.getByRole("button", {name: "Dismiss error", exact: true}).click();
   await page.getByRole("button", {name: "SQL", exact: true}).click();
   expect(await activeFile.innerText()).toBe(fileText);
   await expect(page.getByRole("button", {name: "Visual", exact: true})).toBeDisabled();
@@ -162,7 +174,7 @@ try {
   await page.emulateMedia({colorScheme: "light", reducedMotion: "reduce"});
   for (const width of [1280, 1024, 768, 390]) {
     await page.setViewportSize({width, height: 900});
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
     await expect(page.getByRole("button", {name: "Run statement", exact: true})).toBeVisible();
     await page.getByRole("button", {name: "Browse history", exact: true}).click();
     const historyMenu = page.locator(".floating-menu:popover-open");
@@ -184,10 +196,14 @@ try {
   await page.setViewportSize({width: 1536, height: 1024});
 
   await page.getByRole("button", {name: "EDN", exact: true}).click();
-  await expect(editor).toContainText("SUM(amount)");
-  await expect(editor).not.toContainText(":select");
+  await expect(editor).toContainText(":select");
+  await expect(editor).toContainText(":from");
+  await page.getByRole("button", {name: "SQL", exact: true}).click();
+  await expect(editor).toHaveText(sql, {useInnerText: true});
+  await page.getByRole("button", {name: "EDN", exact: true}).click();
+  await expect(editor).toContainText(":select");
   const ednQuery = "{:select [:customer_id [[:sum :amount] :revenue]] :from [:orders] :group-by [:customer_id] :order-by [[:customer_id :asc]]}";
-  await editor.fill(ednQuery);
+  await replaceEditorContent(page, editor, ednQuery, modifier);
   await expect(editor).toContainText(":select");
   await expect(editor).toContainText(":from");
   await expect(editor).not.toContainText(":sql");
@@ -196,9 +212,9 @@ try {
   await page.screenshot({path: join(output, "query-edn.png"), fullPage: true});
   await page.getByRole("button", {name: "SQL", exact: true}).click();
   await expect(page.getByRole("button", {name: "Run statement", exact: true})).toBeVisible();
-  await expect(editor).toHaveAttribute("data-language", "sql");
-  await expect(editor).toContainText(ednQuery);
-  await editor.fill("select customer_id,sum(amount) as revenue from orders group by customer_id order by customer_id");
+  await expect(editor).not.toContainText(":select");
+  await expect(editor).toContainText("revenue");
+  await replaceEditorContent(page, editor, "select customer_id,sum(amount) as revenue from orders group by customer_id order by customer_id", modifier);
   await page.getByRole("button", {name: "SQL formatting", exact: true}).click();
   await page.getByLabel("Keyword case", {exact: true}).selectOption("lower");
   await page.getByLabel("Indent with", {exact: true}).selectOption("true");
@@ -212,21 +228,22 @@ try {
   await page.getByRole("button", {name: "SQL formatting", exact: true}).click();
   await expect(page.getByRole("button", {name: "Visual", exact: true})).toBeDisabled();
   await expect(page.getByLabel("Visual query builder", {exact: true})).toHaveCount(0);
-  await editor.fill("SELECT customer_id FROM orders WHERE status=:status ORDER BY customer_id LIMIT 3");
+  await replaceEditorContent(page, editor, "SELECT customer_id FROM orders WHERE status=:status ORDER BY customer_id LIMIT 3", modifier);
   await setQuerySetting("Parameters", '{"status":"completed"}');
   await page.getByRole("button", {name: "EDN", exact: true}).click();
-  await expect(editor).toContainText("status=:status");
+  await expect(editor).toContainText(":param");
   await page.getByRole("button", {name: "SQL", exact: true}).click();
-  await expect(editor).toHaveAttribute("data-language", "sql");
   await expect(editor).toContainText("status=:status");
   await job(() => page.getByRole("button", {name: "Run all", exact: true}).click());
   await setQuerySetting("Parameters", "{}");
-  await editor.fill("SELECT FROM");
+  await replaceEditorContent(page, editor, "SELECT FROM", modifier);
   await page.getByRole("button", {name: "EDN", exact: true}).click();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("button", {name: "SQL", exact: true})).toHaveClass(/selected/);
   await expect(editor).toContainText("SELECT FROM");
+  await page.getByRole("button", {name: "Dismiss error", exact: true}).click();
   await page.getByRole("button", {name: "SQL", exact: true}).click();
-  await editor.fill("SELECT customer_id, SUM(amount) AS revenue FROM orders GROUP BY customer_id ORDER BY customer_id");
+  await replaceEditorContent(page, editor, "SELECT customer_id, SUM(amount) AS revenue FROM orders GROUP BY customer_id ORDER BY customer_id", modifier);
   await editor.locator(".cm-line").first().click({position: {x: 10, y: 8}});
   await setQuerySetting("Execution dialect", "sqlite", true);
   const sqlite = await job(() => editor.press("F5"));
@@ -271,7 +288,7 @@ try {
   await expect(page.locator(".file-tab.active")).toContainText("orders.sql");
   const modelEditor = activeFile;
   const before = (await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=models/orders.sql`)).json()).content;
-  await modelEditor.fill(before + "\n-- Browser history verification\n");
+  await replaceEditorContent(page, modelEditor, before + "\n-- Browser history verification\n", modifier);
   await page.getByRole("button", {name: "Save file", exact: true}).click();
   await expect(page.getByText("File saved to your project.", {exact:true})).toBeVisible();
   await page.getByRole("button", {name: "Changes", exact: true}).click();
@@ -288,46 +305,48 @@ try {
   await job(() => page.getByRole("button", {name: "Preview model", exact: true}).click());
   await expect(page.locator(".file-tab.active")).toContainText("orders.sql");
   await expect(modelEditor).toContainText("orders");
-  await modelEditor.fill("SELECT 73 AS from_file");
+  await replaceEditorContent(page, modelEditor, "SELECT 73 AS from_file", modifier);
   const fileQuery = await job(() => modelEditor.press("F5"));
   expect(fileQuery.options.editor_content).toBe("SELECT 73 AS from_file");
   await expect(page.locator(".result-grid tbody td").last()).toHaveText("73");
   await expect(page.locator(".file-tab.active")).toContainText("orders.sql");
   await page.getByRole("button", {name: "EDN", exact: true}).click();
-  await expect(modelEditor).toContainText("SELECT 73 AS from_file");
-  await modelEditor.fill("{:select [[74 :from_edn_file]]}");
+  await expect(modelEditor).toContainText(":select");
+  await expect(modelEditor).toContainText(":from_file");
+  await replaceEditorContent(page, modelEditor, "{:select [[74 :from_edn_file]]}", modifier);
   const fileEdn = await job(() => modelEditor.press("F5"));
   expect(fileEdn.options.format).toBe("edn");
   await expect(page.locator(".result-grid tbody td").last()).toHaveText("74");
   await page.getByRole("button", {name: "SQL", exact: true}).click();
-  await expect(modelEditor).toContainText(":from_edn_file");
-  await modelEditor.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
-  await modelEditor.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
+  await expect(modelEditor).toContainText("from_edn_file");
+  await expect(modelEditor).not.toContainText(":select");
+  await modelEditor.press(`${modifier}+z`);
+  await modelEditor.press(`${modifier}+z`);
   await expect(page.getByRole("button", {name: "Save file", exact: true})).toBeDisabled();
 
   await page.getByRole("button", {name: "Activity", exact: true}).click();
   await page.getByRole("button", {name: "Query lab", exact: true}).click();
   await page.getByRole("navigation", {name: "Open files", exact: true}).getByRole("button", {name: "Query 1", exact: true}).click();
   await setQuerySetting("Execution dialect", "duckdb", true);
-  await editor.fill("SELECT 1 AS value; SELECT missing FROM orders; SELECT 3 AS value;");
+  await replaceEditorContent(page, editor, "SELECT 1 AS value; SELECT missing FROM orders; SELECT 3 AS value;", modifier);
   const failed = await job(() => page.getByRole("button", {name: "Run all", exact: true}).click(), false);
   expect(failed.summary.statement_results).toHaveLength(1);
   expect(failed.summary.statement_index).toBe(2);
-  await editor.fill("WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM t WHERE n < 1000000000) SELECT SUM(n) FROM t");
+  await replaceEditorContent(page, editor, "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM t WHERE n < 1000000000) SELECT SUM(n) FROM t", modifier);
   const longPromise = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/jobs"));
   await editor.press("F5");
   const longJob = await (await longPromise).json();
   await expect(page.getByRole("status", {name: "Workbench status"})).toContainText(/running|queued/i);
   await page.getByRole("button", {name: "Cancel query", exact: true}).click({timeout: 10000});
   await expect.poll(async () => (await (await page.request.get(`${base}/api/jobs/${longJob.id}`)).json()).status).toBe("cancelled");
-  await editor.fill("SELECT 42 AS value");
+  await replaceEditorContent(page, editor, "SELECT 42 AS value", modifier);
   const latestResult = await job(() => editor.press("Shift+Enter"));
   await expect(page.locator(".result-grid tbody td").last()).toHaveText("42");
   await expect(editor).toBeFocused();
   await page.getByLabel("Theme", {exact: true}).selectOption("dark");
   let releaseRestoredResult;
   const restoredResultGate = new Promise(resolve => { releaseRestoredResult = resolve; });
-  const restoredResultUrl = `${base}/api/results/${latestResult.result_id}`;
+  const restoredResultUrl = `${browserBase}/api/results/${latestResult.result_id}`;
   await page.route(restoredResultUrl, async route => { await restoredResultGate; await route.continue(); });
   const restoredResponse = page.waitForResponse(response => response.url() === restoredResultUrl);
   await page.reload();
@@ -342,7 +361,7 @@ try {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await expect(page.getByRole("button", {name: "Activity", exact: true})).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".job-row")).not.toHaveCount(0);
-  const historyPoll = page.waitForResponse(response => response.url() === `${base}/api/projects/demo-jaffle-shop/jobs` && response.request().method() === "GET");
+  const historyPoll = page.waitForResponse(response => response.url() === `${browserBase}/api/projects/demo-jaffle-shop/jobs` && response.request().method() === "GET");
   await page.locator(".job-row").filter({hasText: "Query"}).first().click();
   await expect(page.getByRole("button", {name: "Load query", exact: true})).toBeVisible();
   await historyPoll;
@@ -360,18 +379,20 @@ try {
   await expect(page.locator(".file-tab.active")).toContainText("customers.sql");
   const visibleFile = activeFile;
   const customerFile = (await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=models/customers.sql`)).json()).content;
-  await visibleFile.fill(customerFile + "\n-- Unsaved tab verification\n");
+  await replaceEditorContent(page, visibleFile, customerFile + "\n-- Unsaved tab verification\n", modifier);
   await page.getByRole("navigation", {name: "Open files", exact: true}).getByRole("button", {name: "orders.sql", exact: true}).click();
   await page.getByRole("navigation", {name: "Open files", exact: true}).getByRole("button", {name: /^customers\.sql/}).click();
   await expect(visibleFile).toContainText("Unsaved tab verification");
   const unsavedText = await visibleFile.innerText();
   await page.getByRole("button", {name: "EDN", exact: true}).click();
+  await expect(page.getByRole("alert")).toContainText("Compile dbt templates");
   expect(await visibleFile.innerText()).toBe(unsavedText);
+  await page.getByRole("button", {name: "Dismiss error", exact: true}).click();
   await page.getByRole("button", {name: "SQL", exact: true}).click();
   expect(await visibleFile.innerText()).toBe(unsavedText);
   const unchanged = await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=models/customers.sql`)).json();
   expect(unchanged.content).toBe(customerFile);
-  await visibleFile.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
+  await visibleFile.press(`${modifier}+z`);
   await expect(visibleFile).not.toContainText("Unsaved tab verification");
   await page.screenshot({path: join(output, "model-files.png"), fullPage: true});
 
@@ -380,7 +401,7 @@ try {
   await expect(metadata).toContainText("models/customers.sql");
   await expect(metadata).toContainText("Recorded dbt artifacts");
   await expect(metadata.locator(".metadata-recorded")).toContainText("customer_id");
-  await visibleFile.fill("SELECT customer_id, 1 AS draft_probe FROM {{ ref('stg_customers') }}");
+  await replaceEditorContent(page, visibleFile, "SELECT customer_id, 1 AS draft_probe FROM {{ ref('stg_customers') }}", modifier);
   await expect(metadata.locator(".metadata-draft")).toContainText("draft_probe");
   await expect(metadata.locator(".metadata-recorded")).not.toContainText("draft_probe");
   await metadata.locator(".metadata-draft").getByRole("button", {name: "stg_customers", exact: true}).click();
@@ -390,7 +411,7 @@ try {
   await metadata.getByRole("button", {name: "Back to active file", exact: true}).click();
   await expect(metadata.locator(".metadata-recorded")).toContainText("customer_id");
   await page.screenshot({path: join(output, "metadata.png"), fullPage: true});
-  await visibleFile.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
+  await visibleFile.press(`${modifier}+z`);
   await expect(page.getByRole("button", {name: "Save file", exact: true})).toBeDisabled();
   await page.getByRole("navigation", {name: "Open files", exact: true}).getByRole("button", {name: "orders.sql", exact: true}).click();
   await expect(metadata).toContainText("models/orders.sql");
@@ -425,7 +446,9 @@ try {
     await page.getByRole("button", {name: "SQL", exact: true}).click();
     expect(await visibleFile.innerText()).toBe(original);
     await page.getByRole("button", {name: "EDN", exact: true}).click();
+    await expect(page.getByRole("alert")).toBeVisible();
     expect(await visibleFile.innerText()).toBe(original);
+    await page.getByRole("button", {name: "Dismiss error", exact: true}).click();
     await page.getByRole("button", {name: "Text", exact: true}).click();
     await expect(page.getByRole("button", {name: "Save file", exact: true})).toBeDisabled();
     expect((await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=${encodeURIComponent(path)}`)).json()).content).toBe(fileResponse.content);
@@ -456,6 +479,8 @@ try {
   await page.getByRole("button", {name: "SQL", exact: true}).click();
   await expect(page.getByRole("button", {name: "Save file", exact: true})).toBeDisabled();
   await page.getByRole("button", {name: "EDN", exact: true}).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", {name: "Dismiss error", exact: true}).click();
   await expect(page.getByRole("button", {name: "Save file", exact: true})).toBeDisabled();
   await page.getByRole("button", {name: "Text", exact: true}).click();
   expect((await (await page.request.get(`${base}/api/projects/demo-jaffle-shop/file?path=README.md`)).json()).content).toBe(readme.content);
@@ -483,14 +508,14 @@ try {
   await expect(split).toHaveAttribute("aria-valuenow", "50");
   await expect(filesDivider).toHaveAttribute("aria-valuenow", "290");
   await setQuerySetting("Maximum result rows", "2");
-  await editor.fill("SELECT customer_id FROM customers ORDER BY customer_id LIMIT 5");
+  await replaceEditorContent(page, editor, "SELECT customer_id FROM customers ORDER BY customer_id LIMIT 5", modifier);
   const bounded = await job(() => editor.press("F5"));
   expect(bounded.summary.row_count).toBe(2);
   expect(bounded.summary.truncated).toBe(true);
   await setQuerySetting("Maximum result rows", "10000");
   await setQuerySetting("Execution dialect", "federated", true);
   const federatedSql = "SELECT COUNT(*) AS joined_rows FROM dev.main.customers c JOIN baseline.main.customers b USING (customer_id)";
-  await editor.fill(federatedSql);
+  await replaceEditorContent(page, editor, federatedSql, modifier);
   const federated = await job(() => editor.press("F5"));
   expect(federated.summary.row_count).toBe(1);
   await expect(page.locator(".result-grid tbody td").last()).toHaveText("100");
@@ -498,7 +523,7 @@ try {
   await page.getByLabel("Saved query name", {exact: true}).fill("Customer federation");
   await page.getByRole("button", {name: "Save query", exact: true}).click();
   await page.getByRole("button", {name: "Saved queries", exact: true}).click();
-  await editor.fill("SELECT 99 AS value");
+  await replaceEditorContent(page, editor, "SELECT 99 AS value", modifier);
   await page.getByRole("button", {name: "Saved queries", exact: true}).click();
   await page.getByLabel("Open saved query", {exact: true}).selectOption("");
   const savedId = await page.getByLabel("Open saved query", {exact: true}).locator("option").last().getAttribute("value");
@@ -617,6 +642,8 @@ try {
   expect(Math.round((await globalStatus.boundingBox()).bottom || ((await globalStatus.boundingBox()).y + (await globalStatus.boundingBox()).height))).toBe(900);
   await page.setViewportSize({width: 1536, height: 1024});
   await expect(activeFile).toBeVisible();
+  await verifyEditorWorkflow({page, base, browserBase, output, modifier, job, confirmDiscard: value => { discardConfirmed = value; }});
+  discardConfirmed = true;
   await page.getByRole("button", {name: "Choose project", exact: true}).click();
   await expect(page.getByRole("button", {name: "Create Jaffle demo", exact: false})).toBeVisible();
   await page.reload();

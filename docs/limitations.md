@@ -13,10 +13,16 @@ Native dbt platform support remains separate. Builds use profile targets and can
 | Federation | Maximum 16 physical input relations; 50,000 rows per relation |
 | Snow CLI | Bounded SELECT/WITH; maximum 32 MiB per captured output stream |
 
-Only validated SELECT/WITH queries run in Query lab. Compile dbt Jinja before querying it.
+Only validated SELECT/WITH queries run in Query lab.
 Unsupported SQL functions, syntax, or conversion nodes fail with a diagnostic.
-The SQL-to-EDN API supports a bounded grammar. Browser mode switches preserve the text without translating it.
-Visual mode is disabled. Write SQL or supported HoneySQL EDN in the editor.
+SQL/EDN mode switches use a bounded conversion grammar. Unsupported expressions leave the draft and mode intact.
+Compile dbt Jinja with **Preview model** before converting it. Visual mode is disabled.
+An untouched EDN representation restores its original SQL, including comments and spacing.
+Edited EDN must compile before saving a native `.sql` file. Conversion failure prevents that save.
+**Always format on mode switch** is off by default. Enabling it can change restored SQL whitespace.
+Fixed-point decimal conversion preserves values with precision and scale up to 38.
+Scientific literals and quoted identifiers containing dots or slashes require SQL editing.
+EDN formatting preserves standard numeric types. Explicit formatting can remove EDN comments.
 
 SQLite copies can truncate input relations. Its date, type, collation, and numeric semantics can differ from DuckDB.
 Native division is refused in SQLite. Structured division specifies floating-point results and NULL on zero.
@@ -60,10 +66,15 @@ Inferred field names have no inferred types. Recorded schema and tests can diffe
 Draft parsing supports SQL/Jinja and JSON. Other file types show file details and any matching recorded resources.
 File tabs edit UTF-8 text up to 2 MiB. Binary and larger files provide read-only metadata without editable content.
 Generated directories, symbolic links, and `profiles.yml` stay outside the explorer.
+Untitled tabs remain drafts until **Save file** confirms a relative project path.
+Creation refuses existing entries and excluded paths. It requires secure directory support from the filesystem.
+Closing a dirty tab asks whether to discard its draft.
 Catalog and run results are selected from available artifacts by file modification time.
 Source freshness is displayed only from existing `sources.json` results; the app does not launch freshness checks.
 
-Saved query drafts and formatting preferences live in one browser. Export drafts before clearing browser storage.
+Saved query drafts, formatting preferences, and keyboard shortcuts live in one browser.
+Export saved queries before clearing browser storage.
+Shortcut assignments reject reserved keys and conflicts. Browser and operating-system shortcuts can still intercept key combinations.
 Changes archives workbench saves. External edits trigger revision conflicts but are not automatically archived.
 Legacy Arrow results require rerunning their saved queries through JDBC.
 

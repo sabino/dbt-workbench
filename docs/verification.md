@@ -1,11 +1,11 @@
 # Verification
 
-Validated on macOS ARM64 on 2026-10-09 with Java, Clojure, Bun 1.4.2, native dbt 2.0.5, and headless Chromium.
+Validated on macOS ARM64 on 2026-10-09 with Java, Clojure, Bun 1.4.2, native dbt 2.0.5, and isolated Linux Chromium.
 The application runtime requires no Python. Dependency versions are pinned in `deps.edn` and `frontend/bun.lock`.
 
 ## Backend
 
-`clojure -M:test` passed **54 tests and 443 assertions**, with zero failures or errors.
+`clojure -M:test` passed **75 tests and 607 assertions**, with zero failures or errors.
 The suite uses real native dbt, DuckDB JDBC, SQLite, temporary Git repositories, and HTTP requests.
 The demo builds three seeds and five models and passes 20 dbt tests.
 
@@ -28,9 +28,11 @@ The CLI check establishes SELECT execution through that adapter, not those separ
 
 ## Frontend
 
-`bun test src` passed **17 tests and 65 assertions**.
+`bun test src` passed **37 tests and 163 assertions**.
 Tests cover statement boundaries, cursor and selection execution, empty input, formatting, chart aggregation, query-library validation, and lineage layout.
 Metadata tests cover SQL/Jinja lexical boundaries, outer projections, literal configuration, dynamic expressions, incomplete drafts, and JSON value types.
+Editor tests cover exact SQL restoration, conversion caches, stale responses, native file formats, and dirty-state calculation.
+Command tests cover search, enabled actions, key assignments, conflicts, reserved keys, and persisted overrides.
 The optimized frontend build completed with **zero compilation warnings**.
 The build tool emitted its JVM dependency's `sun.misc.Unsafe` deprecation notice.
 Backend lint completed with zero errors and warnings.
@@ -38,12 +40,17 @@ Frontend lint completed with zero errors and warnings using explicit Fulcro macr
 
 ## Browser
 
-`bun run test:browser` passed **18 job workflows with zero uncaught browser errors**.
+`bun run test:browser` passed **21 job workflows with zero uncaught browser errors**.
 It starts an isolated temporary server and removes its project data afterward.
+The browser ran through CDP in a hidden Linux workspace. Scoped loopback relays connected it to the temporary macOS server.
 
 Query checks cover Build/Test, highlighting, completion, line numbers, Shift+Enter/F5, selection, cursor execution, and editor focus.
 They also cover sequential results, pagination, parameters, formatting, failed drafts, and cancellation.
-SQL and EDN execute directly from file tabs. Mode switches preserve text, parameters, dirty state, and undo history.
+SQL and EDN execute directly from file tabs. SQL-to-EDN shows real HoneySQL data.
+Returning from untouched EDN restores exact SQL, parameters, dirty state, and undo history.
+Editor workflows cover new tabs, dirty marks, path validation, native-format saves, and execution after reopening.
+They check precise EDN formatting, invalid drafts, delayed conversions, optional automatic formatting, and retained file focus.
+Keyboard checks cover file and command search, modal buttons, Tab navigation, shortcut assignment, and persistence after reload.
 Visual mode remains disabled. Markdown and JSON files open alongside SQL files in the central editor.
 CSV, Python, and extensionless files retain text across mode switches. Binary files open in read-only tabs with metadata.
 A local federated join across development and baseline connections returned the expected 100 matching customers.
@@ -82,6 +89,7 @@ Popover checks also verify hit testing, Escape dismissal, and closed menus being
 An isolated Linux Chromium workspace exercised the bundled Jaffle Shop demo against a separate local macOS server.
 Manual checks covered file editing and saving, Build/Test, model previews, metadata dependencies, lineage, pane resizing, and result comparison.
 Two complete 100-row previews matched. The captures contain demo data and recorded job outcomes.
+The tabbed editor capture shows a completed 62-row customer purchase query on the running local demo.
 
 ## Visual evidence
 
@@ -90,6 +98,7 @@ The [light reference](workbench-design-reference.png) guides the light palette.
 The [screenshot guide](screenshots.md) explains the Linux browser captures and their workflows.
 Browser captures include the [dark workspace](workbench-query-dark.png), [mobile layout](workbench-query-mobile.png),
 [metadata parser](workbench-metadata.png), [recorded dependencies](workbench-metadata-dependencies.png), [comparison](workbench-results-compare.png),
+[EDN representation](workbench-query-edn.png), [command center](workbench-command-center.png), [shortcut settings](workbench-keyboard-shortcuts.png),
 [autocomplete](workbench-autocomplete-dark.png), and [Changes history](workbench-changes.png).
 The [central file editor](workbench-files.png), [lineage](workbench-lineage.png), [Overview](workbench-overview.png),
 [local Git](workbench-git.png), [charts](workbench-charts.png), and [history popover](workbench-history-menu.png) show the pane arrangement.

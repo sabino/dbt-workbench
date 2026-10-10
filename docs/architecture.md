@@ -28,7 +28,10 @@ There is no global mutable query metadata cache.
 JSqlParser identifies physical tables, parameters, and unsafe operations.
 Malli validates requests and structured EDN. HoneySQL compiles query maps to SQL with separate parameter values.
 The SQL-to-EDN API supports a bounded grammar and reports unsupported expressions.
-Browser mode switches change highlighting and execution mode while preserving document text. Visual mode is disabled.
+Browser SQL/EDN switches call the conversion API and cache both document representations.
+An unchanged EDN view restores the original SQL source, including comments and spacing.
+Edited EDN compiles before a native `.sql` save. Failed conversions preserve the draft and mode.
+Jinja conversion requires compilation through Preview model. Visual mode is disabled.
 Tokenization preserves strings and comments when splitting statements or binding parameters.
 
 DuckDB opens database files read-only. SQLite previews copy referenced DuckDB relations into memory.
@@ -57,7 +60,10 @@ Run inspection reads artifact files even when failed jobs lack summary artifacts
 Run comparison summarizes recorded model/test outcomes and timing; it does not compare database rows.
 Overview combines recorded tests, local Git changes, recent jobs, and transitive model dependencies.
 
-File saves require the latest content revision and preserve before/after versions.
+Existing file saves require the latest content revision and preserve before/after versions.
+Untitled documents remain in-memory drafts until Save confirms a project path.
+The create endpoint validates UTF-8 content, path boundaries, and the 2 MiB limit.
+Secure directory handles reject symlink traversal. Exclusive creation refuses overwrites, including competing creates.
 Loading a historical version creates a draft. Active jobs block file saves and reference changes.
 Generated paths, profiles, symbolic links, and paths outside the project are excluded from editing.
 Baseline artifacts preserve compilation state, not source rows.
@@ -83,13 +89,20 @@ Query lab contains the file tabs and CodeMirror editors alongside a scratch quer
 The right Files pane contains the sole file explorer.
 Models and All files filter one tree, replacing the duplicate left file list.
 Multiple file tabs retain drafts, selection, undo history, and editor mode. Loading saved queries activates the scratch document.
+The final tabstrip button creates an untitled document. Dirty markers compare the draft's native representation with saved content.
+SQL and EDN representations retain separate editor history. Mode conversion does not write files.
+An accessible path dialog collects the destination for an untitled Save.
 Pane sizes, explorer visibility, file views, and navigation collapse persist in browser storage.
 Metadata follows the active file. Its static lexer infers literal Jinja calls and unambiguous outer SELECT field names.
 It reads JSON top-level types without evaluating templates. Recorded schema and dependencies come from existing dbt artifacts.
 Types, dynamic expressions, wildcards, and ambiguous projections remain explicitly unknown during draft inference.
 A global status bar shows progress, elapsed time, errors, and cancellation across views.
 The browser query library saves drafts per project and exports JSON.
-Formatting preferences and query drafts remain in browser storage, separate from server persistence.
+Formatting preferences, keyboard shortcuts, and query drafts remain in browser storage, separate from server persistence.
+Format operates on the active representation. Automatic formatting on mode switches is opt-in.
+A native command-center dialog combines file search, command search, and shortcut settings.
+Mod+P searches files, Mod+Shift+P searches commands, and Mod+K searches both.
+One command registry drives keyboard dispatch and dialog actions. Assignments validate reserved keys and conflicts.
 Charts aggregate sampled saved rows into multiple metrics and optional breakdown categories.
 Sum, Average, Count rows, and Count distinct feed bar or line plots with legend controls.
 Rendering is bounded to 1,000 saved rows, 40 groups, and eight series.

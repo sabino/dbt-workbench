@@ -5,9 +5,9 @@ Native dbt 2.0.5 handles project parsing, compilation, builds, and tests. The ap
 
 **Alpha software.** Workflows and APIs can change. Use it for local development and evaluation.
 
-![dbt Workbench with tabbed SQL files, query results, and the project explorer](docs/workbench-query-dark.png)
+![dbt Workbench with a SQL file draft, 62 customer purchase results, and the project explorer](docs/workbench-query-dark.png)
 
-Explore [screenshots and workflows](docs/screenshots.md) for metadata, lineage, and result comparison.
+Explore [screenshots and workflows](docs/screenshots.md) for EDN, commands, shortcuts, metadata, lineage, and comparison.
 
 ## Start
 
@@ -35,7 +35,8 @@ The right Files pane contains the explorer.
 
 | Workflow | Where |
 | --- | --- |
-| Edit multiple project files with conflict checks | Query lab > File tabs |
+| Edit project files or create untitled drafts with safe saves | Query lab > File tabs |
+| Find files, run commands, or assign shortcuts | Header > Search files and commands |
 | Run SQL or HoneySQL EDN queries | Query lab |
 | Inspect rows, charts, SQL, and provenance | Results |
 | Compare the current result with a saved result | Results > Compare |
@@ -59,9 +60,15 @@ Drag pane dividers or use their arrow keys. Double-click a divider to restore it
 Widths, vertical splits, navigation collapse, and explorer visibility survive reload in the same browser.
 **Reset layout** restores all pane preferences. Query execution preserves editor focus.
 
-**SQL / EDN** selects highlighting and execution mode. Switching modes preserves document text and undo history.
+**SQL / EDN** translates queries through the supported HoneySQL conversion API.
+Returning from untouched EDN restores the original SQL, including comments and spacing.
+Edited EDN compiles to SQL when switching back or saving a `.sql` file.
+Conversion errors preserve the draft and its mode. Use **Preview model** to compile dbt Jinja before conversion.
 **Visual** is disabled. Text files also offer **Text** mode.
 Each file tab retains its draft, selection, and editor mode until closed.
+The final **+** opens an untitled file. A **\*** marks unsaved changes.
+**Save file** opens a project-path dialog for untitled files. The file is created only after you confirm **Create file**.
+Choose an unused relative path. Creation refuses existing entries, generated paths, profiles, and symbolic links.
 **All files** includes CSV, scripts, and files without extensions.
 UTF-8 text up to 2 MiB is editable. Binary and larger files open as read-only tabs with file metadata.
 **Query 1** is a scratch document. Loading saved queries or Activity inputs opens it while preserving file drafts.
@@ -83,7 +90,9 @@ EDN represents queries as HoneySQL data:
 ```
 
 Enter parameter values separately as JSON. Multiple EDN statements use a vector of query maps.
-**Format** formats SQL or EDN. **Style** saves formatting preferences in browser storage.
+**Format** formats the active SQL or EDN representation. **Style** saves preferences in browser storage.
+EDN formatting preserves decimal and large-integer precision. Converted SQL files include their values when saved and reopened.
+**Always format on mode switch** is optional and off by default. Enabling it also formats restored SQL.
 Saved queries also live in browser storage, separately for each project.
 Export downloads query content, parameters, target, and dialect as JSON.
 
@@ -95,6 +104,28 @@ Charts sample the first 1,000 saved rows, with up to 40 groups and eight rendere
 Comparisons preserve duplicate counts. Truncated inputs cannot establish complete equality.
 Activity retains executed statements, draft text, scope, parameters, targets, timings, and statement result IDs.
 **Replay** restores inputs; changed source data can change the output.
+
+## Command center and shortcuts
+
+Use the header's **Search files and commands** control to open the command center.
+`Mod` means Command on macOS or Ctrl on other keyboards.
+
+| Default shortcut | Action |
+| --- | --- |
+| Mod+P | Find project files |
+| Mod+Shift+P | Find commands |
+| Mod+K | Search files and commands together |
+| Mod+N | Open an untitled file |
+| Mod+S | Save the active document |
+| Mod+W | Close the active tab |
+| Shift+Enter, F5, or Mod+Enter | Run the statement or selection |
+| Mod+Shift+Enter | Run all SQL statements |
+| Alt+Shift+F | Format the active document |
+
+Use arrow keys to choose an entry, Enter to open it, and Escape to close the dialog.
+Open **Keyboard shortcuts** from the command center to assign keys, clear bindings, or restore defaults.
+Assignments reject conflicting bindings and reserved browser or editing shortcuts.
+Shortcuts and formatting settings stay in this browser.
 
 ## Projects and connections
 
@@ -131,7 +162,7 @@ The workbench does not push branches automatically.
 
 Projects, jobs, events, changes, connection references, routing, and captured JSON rows live under
 `~/.local/share/dbt-workbench`, or `$XDG_DATA_HOME/dbt-workbench`.
-Saved queries, layout, theme, project selection, and formatting preferences remain in browser storage.
+Saved queries, layout, theme, project selection, formatting preferences, and keyboard shortcuts remain in browser storage.
 
 ```sh
 ./scripts/run.sh --port 8787 --data-dir /path/to/workbench-data

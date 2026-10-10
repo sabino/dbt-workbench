@@ -3,6 +3,7 @@
 The Clojure server serves the UI and API at `http://127.0.0.1:8787`.
 Requests require a loopback Host and same-origin browser context.
 Request bodies are limited to 2 MB and validated with Malli.
+File creation and saves accept larger JSON envelopes for text up to 2 MiB in UTF-8.
 
 ## Projects and inspection
 
@@ -21,10 +22,19 @@ Request bodies are limited to 2 MB and validated with Malli.
 | GET | `/api/projects/{id}/runs/{job_id}` | Job, invocation artifacts, outcomes, test summary |
 | GET | `/api/jobs/{id}/artifacts?run=...&name=...` | Download an existing artifact |
 | GET | `/api/projects/{id}/files` | Project paths, file types, and byte sizes |
+| POST | `/api/projects/{id}/files` | Create `{path, content}` and return its text preview |
 | GET | `/api/projects/{id}/file?path=...` | Text, revision, byte size, and read-only preview details |
 | PUT | `/api/projects/{id}/file` | Save `{path, content, expected_revision}` |
 | GET | `/api/projects/{id}/changes` | Before/after edit history |
 | POST | `/api/projects/{id}/baseline/import` | Import `{artifact_dir, target}` |
+
+File creation returns 201 with `path`, `content`, `revision`, `size_bytes`, and `read_only: false`.
+Paths must be relative to the registered project. Missing parent directories are created.
+Ordinary text files are supported, including CSV and extensionless files.
+Existing files or directories return 409, including competing creation attempts.
+Traversal, absolute paths, symlinks, generated directories, and `profiles.yml` are rejected.
+Content must encode as valid UTF-8, contain no NUL, and fit within 2 MiB.
+Validation runs before any target file is created. Creation requires secure directory support from the filesystem.
 
 Documentation accepts `model_id` for compatibility. Missing resource documentation returns 404.
 Absent artifacts produce explicit empty states. Source freshness comes from recorded `sources.json` results.
@@ -72,7 +82,8 @@ Draft creation requires a clean named branch matching its published origin branc
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| POST | `/api/projects/{id}/query/convert` | Convert `{content, format, parameters?, target?, dialect?}` |
+| POST | `/api/projects/{id}/query/convert` | Convert `{content, format, parameters?, target?, dialect?, save_format?}` |
+| POST | `/api/projects/{id}/query/format` | Pretty-print `{content, format: "edn"}` with standard EDN numeric types |
 | GET/POST | `/api/projects/{id}/jobs` | List or submit jobs |
 | GET | `/api/projects/{id}/results` | Saved results |
 | GET | `/api/jobs/{id}` | Inputs, status, summary, errors |
@@ -81,6 +92,11 @@ Draft creation requires a clean named branch matching its published origin branc
 | GET | `/api/results/{id}` | Result metadata |
 | GET | `/api/results/{id}/rows?offset=0&limit=100` | Captured row page |
 | GET | `/api/results/{id}/download` | CSV download |
+
+Conversion returns `content`, `format`, and `parameters` when generated SQL needs bindings.
+Set `save_format` to `sql` or `edn` for a self-contained document with safely rendered literal values and empty parameters.
+Unbound same-format saves preserve exact source text. Unsupported conversions return an error before file persistence.
+EDN formatting accepts one complete value with standard tags. Decimal and integer suffixes retain their numeric precision.
 
 Submit `{kind, options}`. Kinds are `parse`, `build`, `test`, `baseline`, `preview`, `query`, and `compare`.
 Common options include `target`, `defer`, and `favor_state`.

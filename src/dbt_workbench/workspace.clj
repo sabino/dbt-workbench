@@ -5,9 +5,11 @@
             [clojure.walk :as walk]
             [dbt-workbench.text :as text]
             [dbt-workbench.storage :as storage])
-  (:import (java.nio ByteBuffer)
+  (:import (java.io IOException)
+           (java.nio ByteBuffer CharBuffer)
            (java.nio.charset CharacterCodingException CodingErrorAction StandardCharsets)
-           (java.nio.file Files StandardCopyOption)))
+           (java.nio.file Files StandardCopyOption SecureDirectoryStream LinkOption StandardOpenOption FileAlreadyExistsException)
+           (java.nio.file.attribute FileAttribute)))
 
 (def excluded #{"target" "logs" "dbt_packages" "dbt_modules" ".git" ".venv" "node_modules"})
 (def max-file-preview-bytes (* 2 1024 1024))
@@ -102,6 +104,76 @@
     (cond-> {:path path :content (or content "") :size_bytes size :read_only read-only?}
       read-only? (assoc :preview_reason (if too-large? "This file exceeds the 2 MiB text preview limit." "Binary content is not displayed."))
       (not read-only?) (assoc :revision (storage/digest content)))))
+(defn encode-text [content]
+  (when-not (string? content) (storage/fail! "File content must be text."))
+  (when (str/includes? content "\u0000") (storage/fail! "Text files cannot contain NUL bytes."))
+  (try
+    (.encode (doto (.newEncoder StandardCharsets/UTF_8)
+               (.onMalformedInput CodingErrorAction/REPORT)
+               (.onUnmappableCharacter CodingErrorAction/REPORT))
+             (CharBuffer/wrap ^String content))
+    (catch CharacterCodingException _ (storage/fail! "Text must contain valid UTF-8 characters."))))
+(defn validate-created-path [project path]
+  (when-not (and (string? path) (<= 1 (count path) 4096) (not (str/blank? path))
+                 (not (str/includes? path "\\")) (not (str/includes? path "\u0000"))
+                 (not (re-find #"^[A-Za-z]:" path)))
+    (storage/fail! "Use a relative project file path."))
+  (encode-text path)
+  (let [parts (str/split path #"/" -1)
+        config (read-yaml (io/file (:path project) "dbt_project.yml"))
+        ignored (into (set (map str/lower-case excluded))
+                      (keep #(some-> (config %) str (text/split-on "/") first str/lower-case)
+                            [:target-path :log-path :packages-install-path]))]
+    (when (or (.isAbsolute (.toPath (io/file path)))
+              (some #{"" "." ".."} parts)
+              (some ignored (map str/lower-case parts))
+              (some #{"profiles.yml"} (map str/lower-case parts)))
+      (storage/fail! "Choose a source path inside the project, outside generated directories and profiles.yml."))
+    parts))
+(defn open-project-directory! [project]
+  (let [root (.toAbsolutePath (.normalize (.toPath (io/file (:path project)))))
+        initial (Files/newDirectoryStream (.getRoot root))]
+    (when-not (instance? SecureDirectoryStream initial)
+      (.close initial)
+      (storage/fail! "Safe file creation requires a filesystem with secure directory support."))
+    (loop [^SecureDirectoryStream directory initial parts (seq root)]
+      (if-not parts directory
+        (let [child (try (.newDirectoryStream directory (first parts) (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
+                         (catch Exception error (.close directory) (throw error)))]
+          (.close directory)
+          (recur child (next parts)))))))
+(defn write-created-file! [^SecureDirectoryStream directory name data]
+  ;; CREATE_NEW refuses a competing file or symlink atomically. Never use a replace-capable move here.
+  (with-open [channel (.newByteChannel directory (.toPath (io/file name))
+                                      #{StandardOpenOption/CREATE_NEW StandardOpenOption/WRITE LinkOption/NOFOLLOW_LINKS}
+                                      (make-array FileAttribute 0))]
+    (loop [] (when (.hasRemaining ^ByteBuffer data) (.write channel ^ByteBuffer data) (recur)))))
+(defn create-in-directory! [^SecureDirectoryStream directory absolute parts data]
+  (if (= 1 (count parts))
+    (write-created-file! directory (first parts) data)
+    (let [name (.toPath (io/file (first parts)))
+          child-path (.resolve ^java.nio.file.Path absolute name)]
+      (when (Files/isSymbolicLink child-path) (storage/fail! "Symbolic links cannot be used for file creation."))
+      (when-not (Files/exists child-path (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))
+        (try (Files/createDirectory child-path (make-array FileAttribute 0))
+             (catch FileAlreadyExistsException _ nil)))
+      (with-open [child (.newDirectoryStream directory name (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))]
+        (create-in-directory! child child-path (next parts) data)))))
+(defn create-file! [directory id {:keys [path content] :as request}]
+  (when-not (and (map? request) (= #{:path :content} (set (keys request))))
+    (storage/fail! "File creation requires path and content only." 422))
+  (let [project (find-project directory id)
+        data (encode-text content)
+        parts (validate-created-path project path)]
+    (when (> (.remaining ^ByteBuffer data) max-file-preview-bytes)
+      (storage/fail! "Text files must fit within the 2 MiB preview limit."))
+    (locking directory
+      (try
+        (with-open [root (open-project-directory! project)]
+          (create-in-directory! root (.toPath (io/file (:path project))) parts data))
+        (catch FileAlreadyExistsException _ (storage/fail! "A project entry already exists at this path." 409))
+        (catch IOException _ (storage/fail! "The file could not be created. Check its parent directories, symbolic links, and permissions.")))
+      (read-file directory id path))))
 (defn list-changes [directory id]
   (vec (reverse (storage/read-json (io/file (project-data directory id) "changes.json") []))))
 (defn save-file! [directory id {:keys [path content expected_revision reason]}]
