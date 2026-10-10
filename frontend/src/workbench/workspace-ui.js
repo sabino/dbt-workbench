@@ -55,18 +55,29 @@ export function Popover(props) {
     element.style.left = `${position["left"]}px`;
     element.style.top = `${position["top"]}px`;
   }
-  React.useEffect(function bindPopover() {
+  React.useLayoutEffect(function bindPopover() {
     const element = menu.current;
+    function prepareOpen(event) {
+      // Native toggle events arrive after opening. Keep the menu hidden until its viewport position is measured.
+      if (event["newState"] === "open") element.style.visibility = "hidden";
+    }
     function updateOpen(event) {
       const opened = event["newState"] === "open";
       if (opened) positionMenu();
+      element.style.visibility = "";
       setOpen(opened);
     }
     function reposition() { if (element.matches(":popover-open")) positionMenu(); }
+    const observer = new ResizeObserver(reposition);
+    observer.observe(element);
+    observer.observe(trigger.current);
+    element.addEventListener("beforetoggle", prepareOpen);
     element.addEventListener("toggle", updateOpen);
     window.addEventListener("resize", reposition);
     document.addEventListener("scroll", reposition, true);
     return function unbindPopover() {
+      observer.disconnect();
+      element.removeEventListener("beforetoggle", prepareOpen);
       element.removeEventListener("toggle", updateOpen);
       window.removeEventListener("resize", reposition);
       document.removeEventListener("scroll", reposition, true);
