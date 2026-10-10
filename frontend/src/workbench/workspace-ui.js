@@ -55,13 +55,13 @@ export function Popover(props) {
     element.style.left = `${position["left"]}px`;
     element.style.top = `${position["top"]}px`;
   }
-  function toggleMenu() {
-    if (menu.current.matches(":popover-open")) menu.current.hidePopover();
-    else { menu.current.showPopover(); positionMenu(); }
-  }
   React.useEffect(function bindPopover() {
     const element = menu.current;
-    function updateOpen(event) { setOpen(event["newState"] === "open"); }
+    function updateOpen(event) {
+      const opened = event["newState"] === "open";
+      if (opened) positionMenu();
+      setOpen(opened);
+    }
     function reposition() { if (element.matches(":popover-open")) positionMenu(); }
     element.addEventListener("toggle", updateOpen);
     window.addEventListener("resize", reposition);
@@ -73,7 +73,7 @@ export function Popover(props) {
     };
   }, []);
   return h(React.Fragment, null,
-    h("button", {"ref": trigger, "className": props["className"] || "icon-button", "aria-label": props["label"], "title": props["label"], "aria-haspopup": "dialog", "aria-expanded": open, "aria-controls": id, "onClick": toggleMenu}, props["trigger"] || props["label"]),
+    h("button", {"ref": trigger, "className": props["className"] || "icon-button", "aria-label": props["label"], "title": props["label"], "aria-haspopup": "dialog", "aria-expanded": open, "aria-controls": id, "popovertarget": id, "popovertargetaction": "toggle"}, props["trigger"] || props["label"]),
     h("div", {"ref": menu, "id": id, "popover": "auto", "role": "dialog", "aria-label": props["label"], "className": `floating-menu ${props["menuClass"] || ""}`}, props["children"]));
 }
 

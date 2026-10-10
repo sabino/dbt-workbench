@@ -15,6 +15,7 @@ File creation and saves accept larger JSON envelopes for text up to 2 MiB in UTF
 | POST | `/api/projects/open` | Register `{path, profiles_dir?}` |
 | GET | `/api/projects/{id}` | Project, targets, baseline |
 | GET | `/api/projects/{id}/models` | Project models |
+| GET | `/api/projects/{id}/editor-context` | Local declarations and recorded metadata for editor assistance |
 | GET | `/api/projects/{id}/catalog?target=dev` | Query-builder relation schema |
 | GET | `/api/projects/{id}/catalog?detail=resources` | Manifest resource inventory and counts |
 | GET | `/api/projects/{id}/lineage` | Manifest nodes and dependency edges |
@@ -38,6 +39,11 @@ Validation runs before any target file is created. Creation requires secure dire
 
 Documentation accepts `model_id` for compatibility. Missing resource documentation returns 404.
 Absent artifacts produce explicit empty states. Source freshness comes from recorded `sources.json` results.
+
+Editor context returns `resources`, `manifest_available`, `metadata_source`, `warnings`, and `empty_reason`.
+Resources include names, resource types, packages, descriptions, relation identities, columns, macro arguments, and safe local definition paths.
+The endpoint reads project declarations and manifest/catalog artifacts. It neither executes templates nor requests warehouse metadata.
+Missing manifests use local declarations. Ambiguous references and package resources without editable files cannot provide a chosen local definition.
 
 ## Connections and routing
 

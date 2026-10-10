@@ -5,7 +5,7 @@ The application runtime requires no Python. Dependency versions are pinned in `d
 
 ## Backend
 
-`clojure -M:test` passed **75 tests and 607 assertions**, with zero failures or errors.
+`clojure -M:test` passed **83 tests and 644 assertions**, with zero failures or errors.
 The suite uses real native dbt, DuckDB JDBC, SQLite, temporary Git repositories, and HTTP requests.
 The demo builds three seeds and five models and passes 20 dbt tests.
 
@@ -16,6 +16,7 @@ Result comparisons preserve duplicate counts and report schema differences and t
 
 Inspection checks cover manifest resources, documentation, dependency graphs, recorded tests, run comparisons, and downloadable artifacts.
 Connection checks cover registration, credential references, CLI import, read-only routing validation, and local schema discovery.
+Editor-context tests cover local declaration fallback, manifest/catalog merging, resource paths, and known field metadata.
 Federation checks exercise typed captures, decimal and timestamp handling, nulls, duplicates, aliases, unsupported types, and bounded inputs.
 Git checks exercise local staging, commits, branches, diffs, safe arguments, repository-root restrictions, and disabled hooks.
 
@@ -28,11 +29,13 @@ The CLI check establishes SELECT execution through that adapter, not those separ
 
 ## Frontend
 
-`bun test src` passed **37 tests and 163 assertions**.
+`bun test src` passed **78 tests and 497 assertions**.
 Tests cover statement boundaries, cursor and selection execution, empty input, formatting, chart aggregation, query-library validation, and lineage layout.
 Metadata tests cover SQL/Jinja lexical boundaries, outer projections, literal configuration, dynamic expressions, incomplete drafts, and JSON value types.
 Editor tests cover exact SQL restoration, conversion caches, stale responses, native file formats, and dirty-state calculation.
 Command tests cover search, enabled actions, key assignments, conflicts, reserved keys, and persisted overrides.
+Editor assistance tests cover SQL aliases, literal dbt references, macros, HoneySQL fields, comments, ambiguity, and conservative CTE handling.
+Structural tests cover navigation, selection, wrapping, slurp/barf, per-action undo, read-only boundaries, and Parinfer transaction filters.
 The optimized frontend build completed with **zero compilation warnings**.
 The build tool emitted its JVM dependency's `sun.misc.Unsafe` deprecation notice.
 Backend lint completed with zero errors and warnings.
@@ -40,7 +43,7 @@ Frontend lint completed with zero errors and warnings using explicit Fulcro macr
 
 ## Browser
 
-`bun run test:browser` passed **21 job workflows with zero uncaught browser errors**.
+`bun run test:browser` passed **21 job workflows** plus `verifyEditorIntelligence`, with **zero uncaught browser errors**.
 It starts an isolated temporary server and removes its project data afterward.
 The browser ran through CDP in a hidden Linux workspace. Scoped loopback relays connected it to the temporary macOS server.
 
@@ -50,6 +53,13 @@ SQL and EDN execute directly from file tabs. SQL-to-EDN shows real HoneySQL data
 Returning from untouched EDN restores exact SQL, parameters, dirty state, and undo history.
 Editor workflows cover new tabs, dirty marks, path validation, native-format saves, and execution after reopening.
 They check precise EDN formatting, invalid drafts, delayed conversions, optional automatic formatting, and retained file focus.
+Project-aware editor checks accept SQL alias-field completion and inspect its documentation.
+They cover local macro completion, typed argument documentation, F12, literal `ref`/`source` arguments, Ctrl-click references, and official dbt help links.
+EDN checks accept alias fields and inspect documentation. Rainbow delimiters render in both themes.
+Structural checks cover selection, slurp/barf, individual undo, and Parinfer typing with undo.
+Changing editor settings preserves text and history. Options and source text persist across reload.
+Documentation remains within the viewport at 390 and 1536 pixels. Editor popovers dismiss on a second trigger click.
+
 Keyboard checks cover file and command search, modal buttons, Tab navigation, shortcut assignment, and persistence after reload.
 Visual mode remains disabled. Markdown and JSON files open alongside SQL files in the central editor.
 CSV, Python, and extensionless files retain text across mode switches. Binary files open in read-only tabs with metadata.
@@ -100,6 +110,8 @@ Browser captures include the [dark workspace](workbench-query-dark.png), [mobile
 [metadata parser](workbench-metadata.png), [recorded dependencies](workbench-metadata-dependencies.png), [comparison](workbench-results-compare.png),
 [EDN representation](workbench-query-edn.png), [command center](workbench-command-center.png), [shortcut settings](workbench-keyboard-shortcuts.png),
 [autocomplete](workbench-autocomplete-dark.png), and [Changes history](workbench-changes.png).
+Project-aware editor captures show [SQL reference help](workbench-sql-reference.png), [dark EDN reference help](workbench-edn-reference.png),
+and [light EDN reference help](workbench-edn-reference-light.png).
 The [central file editor](workbench-files.png), [lineage](workbench-lineage.png), [Overview](workbench-overview.png),
 [local Git](workbench-git.png), [charts](workbench-charts.png), and [history popover](workbench-history-menu.png) show the pane arrangement.
 

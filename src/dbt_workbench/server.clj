@@ -50,6 +50,7 @@
         (and (= "POST" method) (= id "demo")) (json-response (workspace/create-demo! directory) 201)
         (and (= "POST" method) (= id "open")) (json-response (do (validation/validate! :open body) (workspace/open-project! directory (:path body) (:profiles_dir body))) 201)
         (nil? action) (json-response (assoc (workspace/find-project directory id) :targets (mapv :id (connections/list-connections directory id)) :baseline (workspace/read-baseline directory id)))
+        (= action "editor-context") (if (= method "GET") (json-response (inspection/read-editor-context directory id)) (storage/fail! "Method not allowed." 405))
         (= action "lineage") (if (= method "GET") (json-response (inspection/read-lineage directory id)) (storage/fail! "Method not allowed." 405))
         (= action "documentation") (if (= method "GET") (json-response (inspection/read-resource directory id (or (:resource_id query) (:model_id query)))) (storage/fail! "Method not allowed." 405))
         (= action "runs") (if (= method "GET") (json-response (inspection/read-job directory id engine detail)) (storage/fail! "Method not allowed." 405))

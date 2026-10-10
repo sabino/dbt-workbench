@@ -1,5 +1,7 @@
 (ns dbt-workbench.inspection
-  (:require [clojure.java.io :as io]
+  (:require [clj-yaml.core :as yaml]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
             [dbt-workbench.runtime :as runtime]
             [dbt-workbench.storage :as storage]
             [dbt-workbench.workspace :as workspace]))
@@ -20,15 +22,19 @@
                                (filter #(.isFile %) (map #(io/file % artifact-name) directories))))]
     {:path (str file) :data (storage/read-json file {})}))
 
-(defn read-project-artifacts [directory project-id]
-  (let [directories (list-artifact-directories directory project-id)
-        saved (io/file directory "projects" project-id "manifest.json")]
-    {:manifest (if (.isFile saved)
-                 {:path (str saved) :data (storage/read-json saved {})}
-                 (read-latest-artifact directories "manifest.json"))
-     :catalog (read-latest-artifact directories "catalog.json")
-     :freshness (read-latest-artifact directories "sources.json")
-     :run_results (read-latest-artifact directories "run_results.json")}))
+(defn read-project-artifacts
+  ([directory project-id]
+   (read-project-artifacts directory project-id #{:manifest :catalog :freshness :run_results}))
+  ([directory project-id kinds]
+   (let [directories (list-artifact-directories directory project-id)
+         saved (io/file directory "projects" project-id "manifest.json")]
+     (cond-> {}
+       (kinds :manifest) (assoc :manifest (if (.isFile saved)
+                                           {:path (str saved) :data (storage/read-json saved {})}
+                                           (read-latest-artifact directories "manifest.json")))
+       (kinds :catalog) (assoc :catalog (read-latest-artifact directories "catalog.json"))
+       (kinds :freshness) (assoc :freshness (read-latest-artifact directories "sources.json"))
+       (kinds :run_results) (assoc :run_results (read-latest-artifact directories "run_results.json"))))))
 
 (defn list-resources [manifest]
   (->> (concat (vals (:nodes manifest)) (vals (:sources manifest)) (vals (:exposures manifest)) (vals (:metrics manifest)))
@@ -180,6 +186,154 @@
            :catalog_path (get-in artifacts [:catalog :path])
            :run_results_path (get-in artifacts [:run_results :path])
            :freshness_path (get-in artifacts [:freshness :path]))))
+
+(def editor-resource-types #{"model" "seed" "snapshot" "source" "macro"})
+(def editor-resource-fields
+  [:unique_id :name :resource_type :package_name :description :source_name :identifier :alias :relation_name])
+
+(defn select-editor-text [data fields]
+  (into {} (for [field fields :let [value (get data field)] :when (string? value)] [field value])))
+
+(defn describe-editor-columns [node catalog-node]
+  (mapv (fn [column]
+          (let [key (keyword (:name column))
+                declared (get-in node [:columns key]) observed (get-in catalog-node [:columns key])]
+            (assoc (select-editor-text column [:name :data_type :description])
+                   :metadata_source (cond (and declared observed) "declared+catalog"
+                                          observed "catalog" :else "declared"))))
+        (list-columns node catalog-node)))
+
+(defn resolve-editor-path [node package files]
+  (when (or (= package (:package_name node))
+            (and (nil? (:package_name node)) (= package (second (str/split (:unique_id node) #"\.")))))
+    (let [patch (:patch_path node)
+          patch (when (and (string? patch) (str/starts-with? patch (str package "://")))
+                  (subs patch (+ (count package) 3)))]
+      (first (filter files [(:original_file_path node) patch (:path node)])))))
+
+(defn build-editor-resource [node catalog-node package files metadata-source]
+  (let [kind (or (:resource_type node) (first (str/split (:unique_id node) #"\.")))
+        node (assoc node :resource_type kind)]
+    (assoc (select-editor-text node editor-resource-fields)
+           :package_name (or (:package_name node) (second (str/split (:unique_id node) #"\.")))
+           :path (resolve-editor-path node package files)
+           :columns (describe-editor-columns node catalog-node)
+           :arguments (mapv #(select-editor-text % [:name :type :description]) (:arguments node))
+           :metadata_source metadata-source)))
+
+(defn index-declared-columns [columns]
+  (into {} (for [column columns :when (and (map? column) (string? (:name column)))]
+             [(keyword (:name column)) (select-editor-text column [:name :data_type :description])])))
+
+(defn build-declared-editor-resources [data path package]
+  (vec
+    (concat
+      (for [kind ["model" "seed" "snapshot" "macro"]
+            declaration (let [entries (get data (keyword (str kind "s")))] (when (sequential? entries) entries))
+            :when (and (map? declaration) (string? (:name declaration)))]
+        (assoc (select-editor-text declaration [:name :description :alias :identifier])
+               :unique_id (str kind "." package "." (:name declaration)) :resource_type kind :package_name package
+               :original_file_path path :columns (index-declared-columns (:columns declaration))
+               :arguments (mapv #(select-editor-text % [:name :type :description]) (:arguments declaration))))
+      (for [source (when (sequential? (:sources data)) (:sources data))
+            table (:tables source)
+            :when (and (string? (:name source)) (string? (:name table)))]
+        (assoc (select-editor-text table [:name :description :identifier])
+               :unique_id (str "source." package "." (:name source) "." (:name table)) :resource_type "source"
+               :package_name package :source_name (:name source) :original_file_path path
+               :columns (index-declared-columns (:columns table)))))))
+
+(defn split-macro-arguments [signature]
+  (loop [characters (seq signature) depth 0 quote nil escaped? false part "" parts []]
+    (if-let [character (first characters)]
+      (cond
+        escaped? (recur (next characters) depth quote false (str part character) parts)
+        (and quote (= character \\)) (recur (next characters) depth quote true (str part character) parts)
+        quote (recur (next characters) depth (when-not (= quote character) quote) false (str part character) parts)
+        (#{\' \"} character) (recur (next characters) depth character false (str part character) parts)
+        (#{\( \[ \{} character) (recur (next characters) (inc depth) nil false (str part character) parts)
+        (#{\) \] \}} character) (recur (next characters) (dec depth) nil false (str part character) parts)
+        (and (= character \,) (zero? depth)) (recur (next characters) depth nil false "" (conj parts part))
+        :else (recur (next characters) depth nil false (str part character) parts))
+      (->> (conj parts part)
+           (keep #(some-> (re-find #"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|$)" %) second))
+           (mapv #(hash-map :name %))))))
+
+(defn discover-editor-blocks [content path package kind]
+  (let [pattern (if (= "macro" kind)
+                  #"(?s)\{%-?\s*macro\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*?)\)\s*-?%\}"
+                  #"\{%-?\s*snapshot\s+([A-Za-z_][A-Za-z0-9_]*)\s*-?%\}")]
+    (mapv (fn [[_ name signature]]
+            {:unique_id (str kind "." package "." name) :name name :resource_type kind :package_name package
+             :original_file_path path :arguments (if signature (split-macro-arguments signature) [])})
+          (re-seq pattern (-> content
+                              (str/replace #"(?s)\{#.*?#\}" "")
+                              (str/replace #"(?s)\{%-?\s*raw\s*-?%\}.*?\{%-?\s*endraw\s*-?%\}" ""))))))
+
+(defn read-editor-declarations [directory project-id files package]
+  (reduce (fn [result file]
+            (try
+              (let [preview (workspace/read-file directory project-id (:path file))
+                    data (when-not (:read_only preview) (yaml/parse-string (:content preview)))]
+                (update result :resources into (if (map? data) (build-declared-editor-resources data (:path file) package) [])))
+              (catch Exception _ (assoc result :warnings ["Some local property files could not be read. Their metadata is omitted."]))))
+          {:resources [] :warnings []} (filter #(contains? #{"yml" "yaml"} (:kind %)) files)))
+
+(defn matches-editor-folder? [path folders]
+  (some #(str/starts-with? path (str (str/replace % #"/$" "") "/")) folders))
+
+(defn read-editor-file-resources [directory project-id files config package]
+  (vec
+    (mapcat
+      (fn [file]
+        (let [path (:path file) kind (:kind file)
+              resource-type (cond (and (contains? #{"sql" "py"} kind) (matches-editor-folder? path (:model-paths config ["models"]))) "model"
+                                  (and (= "csv" kind) (matches-editor-folder? path (:seed-paths config ["seeds"]))) "seed"
+                                  (and (= "sql" kind) (matches-editor-folder? path (:snapshot-paths config ["snapshots"]))) "snapshot"
+                                  (and (= "sql" kind) (matches-editor-folder? path (:macro-paths config ["macros"]))) "macro")]
+          (case resource-type
+            ("macro" "snapshot") (let [preview (try (workspace/read-file directory project-id path) (catch Exception _ nil))]
+                                     (if (or (nil? preview) (:read_only preview)) []
+                                       (discover-editor-blocks (:content preview) path package resource-type)))
+            ("model" "seed") (let [name (str/replace (:name file) #"\.[^.]+$" "")]
+                               [{:unique_id (str resource-type "." package "." name) :name name :resource_type resource-type
+                                 :package_name package :original_file_path path}])
+            []))) files)))
+
+(defn read-editor-context [directory project-id]
+  (let [project (workspace/find-project directory project-id)
+        config (workspace/read-yaml (io/file (:path project) "dbt_project.yml"))
+        package (str (:name config (:name project)))
+        files (workspace/list-files directory project-id)
+        paths (set (map :path files))
+        declarations (read-editor-declarations directory project-id files package)
+        declared (into {} (map (juxt :unique_id identity)) (:resources declarations))
+        local (read-editor-file-resources directory project-id files config package)
+        local (mapv (fn [node]
+                      (let [docs (declared (:unique_id node))]
+                        (cond-> (merge docs node)
+                          (seq (:arguments docs))
+                          (assoc :arguments (let [documented (into {} (map (juxt :name identity)) (:arguments docs))]
+                                              (mapv #(merge % (documented (:name %))) (:arguments node))))))) local)
+        extra (filter #(or (= "source" (:resource_type %)) (= "snapshot" (:resource_type %))) (:resources declarations))
+        artifacts (read-project-artifacts directory project-id #{:manifest :catalog})
+        manifest (get-in artifacts [:manifest :data]) catalog (get-in artifacts [:catalog :data])
+        manifest-available (boolean (seq manifest))
+        nodes (filter #(editor-resource-types (or (:resource_type %) (first (str/split (:unique_id %) #"\."))))
+                      (list-catalog-resources manifest))
+        local-resources (into {} (map (fn [node] [(:unique_id node) (build-editor-resource node nil package paths "project_files")]))
+                              (concat extra local))
+        resources (->> nodes
+                       (reduce (fn [resources node]
+                                 (assoc resources (:unique_id node)
+                                        (build-editor-resource node (or (get-in catalog [:nodes (keyword (:unique_id node))])
+                                                                        (get-in catalog [:sources (keyword (:unique_id node))]))
+                                                               package paths "manifest"))) local-resources)
+                       vals (sort-by (juxt :resource_type :package_name :source_name :name :unique_id)) vec)]
+    {:resources resources :manifest_available manifest-available
+     :metadata_source (if manifest-available "local_artifacts+project_files" "project_files")
+     :warnings (:warnings declarations)
+     :empty_reason (when (empty? resources) "No local dbt resources are available. Add project models or declarations to enable editor suggestions.")}))
 
 (defn read-run-artifacts [run-directory]
   (let [directory (io/file run-directory "artifacts")

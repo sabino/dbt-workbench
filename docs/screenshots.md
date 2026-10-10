@@ -27,6 +27,23 @@ Enabling it also formats restored SQL.
 
 ![HoneySQL EDN data for the customer purchase query, with its captured results below](workbench-query-edn.png)
 
+## Inspect editor references
+
+Hover a SQL relation, field, dbt function, or macro to read available documentation.
+Ctrl/Cmd-click or F12 opens the local definition when the reference has one unique target.
+Completion and help read project declarations and recorded artifacts without executing templates.
+
+![SQL editor reference documentation in the dark theme](workbench-sql-reference.png)
+
+EDN help describes HoneySQL clauses, expressions, model relations, and known fields.
+**Editor** settings persist Paredit, Parinfer, plain editing, and optional rainbow delimiters in this browser.
+
+![EDN editor reference documentation in the dark theme](workbench-edn-reference.png)
+
+![EDN editor reference documentation in the light theme](workbench-edn-reference-light.png)
+
+See [editor workflows and shortcuts](editor.md) for structural navigation and metadata limits.
+
 ## Find files and commands
 
 Open the header's command center, or press Mod+P for files, Mod+Shift+P for commands, or Mod+K for both.

@@ -5,6 +5,7 @@ import {tmpdir} from "node:os";
 import {resolve, join} from "node:path";
 import {createServer} from "node:net";
 import {verifyEditorWorkflow} from "./editor-workflow.js";
+import {verifyEditorIntelligence} from "./editor-intelligence-workflow.js";
 import {replaceEditorContent} from "./editor-actions.js";
 
 const projectRoot = resolve(import.meta.dir, "../..");
@@ -643,6 +644,7 @@ try {
   await page.setViewportSize({width: 1536, height: 1024});
   await expect(activeFile).toBeVisible();
   await verifyEditorWorkflow({page, base, browserBase, output, modifier, job, confirmDiscard: value => { discardConfirmed = value; }});
+  await verifyEditorIntelligence({page, base, output, modifier});
   discardConfirmed = true;
   await page.getByRole("button", {name: "Choose project", exact: true}).click();
   await expect(page.getByRole("button", {name: "Create Jaffle demo", exact: false})).toBeVisible();

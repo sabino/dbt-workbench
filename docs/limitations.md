@@ -78,6 +78,26 @@ Shortcut assignments reject reserved keys and conflicts. Browser and operating-s
 Changes archives workbench saves. External edits trigger revision conflicts but are not automatically archived.
 Legacy Arrow results require rerunning their saved queries through JDBC.
 
+## Editor assistance
+
+Editor completion and definition lookup use a bounded local parser and index, not a language server.
+Suggestions do not establish SQL validity or complete grammar coverage.
+CTE and derived-query output columns are not inferred. CTE names shadow similarly named project resources.
+Unresolved relations suppress unqualified field hints. Use explicit relations and aliases when their declared metadata is available.
+Jinja help covers supported dbt functions, macros, and context variables inside SQL template blocks.
+Documentation does not inspect their runtime values. HoneySQL EDN does not execute dbt runtime macros.
+
+Project files and recorded manifest/catalog artifacts supply editor metadata without warehouse requests.
+Dynamic references and ambiguous names have no selected definition. Package resources without editable local files provide documentation only.
+Field types appear only when declared or recorded. Missing metadata cannot establish a complete schema.
+Recorded artifacts can be stale. Refresh declarations and parse or build after source changes.
+
+Paredit is the default EDN editing mode. Optional Parinfer smart mode adjusts parentheses during supported user edits.
+Changing settings, converting modes, pasting, and undo/redo do not trigger Parinfer corrections.
+Selected deletion and multiple-cursor edits also bypass inference.
+Rainbow delimiters decorate syntax without changing the draft. Editor settings remain in the same browser.
+See [editor help and shortcuts](editor.md) for navigation and structural editing.
+
 ## Git and runtime
 
 Branch switches, rebase, and cherry-pick require a clean local tree.

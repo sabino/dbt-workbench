@@ -68,6 +68,26 @@ Loading a historical version creates a draft. Active jobs block file saves and r
 Generated paths, profiles, symbolic links, and paths outside the project are excluded from editing.
 Baseline artifacts preserve compilation state, not source rows.
 
+## Editor assistance
+
+`GET /api/projects/:id/editor-context` builds a read-only index from project files and recorded manifest/catalog artifacts.
+Local model, seed, snapshot, macro, and YAML declarations provide fallback resources.
+Recorded artifacts add descriptions, signatures, relation identities, and known columns and types.
+The endpoint never queries a warehouse or executes templates.
+
+The browser resolves supported SQL relation aliases and literal Jinja `ref`/`source` calls against that index.
+Macro help and completion apply inside SQL template blocks, alongside dbt functions and context-variable documentation.
+CTE names shadow project relations. Derived output columns remain unknown; unresolved relations suppress unqualified field suggestions.
+HoneySQL EDN uses relation and field keywords, clause documentation, and expression functions.
+Only unique targets provide definition paths. Missing files, ambiguous names, and dynamic expressions retain help without invented targets.
+
+Nextjournal supplies EDN parsing and Paredit commands. Parinfer smart mode is an optional transaction filter.
+It corrects typing, deletion, and indentation edits while excluding conversion, history, completion, paste, and selection-only changes.
+Rainbow delimiter decoration is optional. Reconfiguring editor settings preserves document text.
+Structural commands share the assignable command registry. Each explicit structural edit is isolated in undo history.
+Parinfer corrections share the triggering edit's undo step. Editor options persist in browser storage.
+See [editor workflows](editor.md) for shortcuts and upstream references.
+
 ## Local and remote operations
 
 Connection registration stores local settings or references. It does not rewrite dbt profiles.
@@ -109,5 +129,5 @@ Rendering is bounded to 1,000 saved rows, 40 groups, and eight series.
 
 Bun installs pinned dependencies. shadow-cljs compiles assets into `resources/static/js`.
 SQL Formatter's browser bundle is copied unchanged to preserve its regular-expression templates.
-CodeMirror uses Nextjournal's Clojure grammar for EDN.
+CodeMirror uses Nextjournal's Clojure grammar and structural commands for EDN. Format remains an explicit workbench action.
 The native dbt installer verifies its pinned archive checksum.

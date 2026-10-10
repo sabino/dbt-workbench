@@ -32,12 +32,18 @@ function scanTemplate(text, start, close) {
 export function tokenizeDraft(text, templates = true) {
   const tokens = [];
   const diagnostics = [];
+  const comments = [];
   let index = 0;
   while (index < text.length) {
     const start = index;
     const char = text[index];
     if (/\s/.test(char)) { index += 1; continue; }
-    if (text.startsWith("--", index)) { const end = text.indexOf("\n", index); index = end === -1 ? text.length : end + 1; continue; }
+    if (text.startsWith("--", index)) {
+      const end = text.indexOf("\n", index);
+      comments.push({start, end: end === -1 ? text.length : end});
+      index = end === -1 ? text.length : end + 1;
+      continue;
+    }
     if (text.startsWith("/*", index)) {
       let depth = 1;
       index += 2;
@@ -47,17 +53,27 @@ export function tokenizeDraft(text, templates = true) {
         else index += 1;
       }
       if (depth) diagnostics.push("An SQL comment is incomplete.");
+      comments.push({start, end: index});
       continue;
     }
     if (templates && text.startsWith("{#", index)) {
       const end = text.indexOf("#}", index + 2);
       if (end === -1) diagnostics.push("A Jinja comment is incomplete.");
       index = end === -1 ? text.length : end + 2;
+      comments.push({start, end: index});
       continue;
     }
     if (templates && (text.startsWith("{{", index) || text.startsWith("{%", index))) {
       const block = text.startsWith("{%", index);
       const part = scanTemplate(text, index, block ? "%}" : "}}");
+      if (block && /^-?\s*raw\s*-?$/.test(part["value"])) {
+        const ending = /\{%-?\s*endraw\s*-?%\}/g;
+        ending.lastIndex = part["end"];
+        const match = ending.exec(text);
+        index = match ? match.index + match[0].length : text.length;
+        comments.push({start, end: index});
+        continue;
+      }
       tokens.push({"kind": block ? "template_block" : "template", "value": part["value"], "start": start, "end": part["end"]});
       if (!part["closed"]) diagnostics.push("A Jinja expression is incomplete.");
       index = part["end"]; continue;
@@ -91,7 +107,7 @@ export function tokenizeDraft(text, templates = true) {
     index += 1;
     tokens.push({"kind": "symbol", "value": char, "start": start, "end": index});
   }
-  return {"tokens": tokens, "diagnostics": diagnostics};
+  return {"tokens": tokens, "diagnostics": diagnostics, "comments": comments};
 }
 
 function splitTopLevel(tokens, separator) {
